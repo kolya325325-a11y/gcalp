@@ -1,14 +1,18 @@
 import tkinter as tk
+import sys
 
 from calculator_engine import Calculator
 
 
-# Палитра вынесена отдельно, чтобы оформление было легко менять целиком.
+# Платформо-зависимая палитра для корректной отрисовки на разных ОС
+IS_MAC = sys.platform == "darwin"
+
 BACKGROUND = "#202020"
-BUTTON = "#323232"
-BUTTON_HOVER = "#3d3d3d"
-BUTTON_FUNCTION = "#292929"
-ACCENT = "#4cc2ff"
+# На Mac используются более светлые цвета для лучшей видимости
+BUTTON = "#323232" if not IS_MAC else "#424242"
+BUTTON_HOVER = "#3d3d3d" if not IS_MAC else "#505050"
+BUTTON_FUNCTION = "#292929" if not IS_MAC else "#353535"
+ACCENT = "#4cc2ff" if not IS_MAC else "#2196F3"
 TEXT = "#f4f4f4"
 MUTED = "#a9a9a9"
 
@@ -27,12 +31,13 @@ class CalculatorApp:
 
     def _configure_window(self) -> None:
         """Настраивает заголовок, фон, размер и шрифты окна."""
-        # Используется системный шрифт Windows, с которым интерфейс выглядит привычно.
+        # Используйте системный шрифт для каждой платформы (Mac, Windows, Linux)
+        font_family = "Helvetica" if IS_MAC else "Segoe UI"
         self.root.title("Калькулятор")
         self.root.configure(bg=BACKGROUND)
         self.root.geometry("360x620")
         self.root.minsize(320, 550)
-        self.root.option_add("*Font", ("Segoe UI", 11))
+        self.root.option_add("*Font", (font_family, 11))
 
     def _create_widgets(self) -> None:
         """Создаёт панели дисплея и сетку кнопок калькулятора."""
@@ -100,7 +105,8 @@ class CalculatorApp:
         is_number = action.isdigit() or action in ("decimal", "sign")
         is_equals = action == "equals"
         color = ACCENT if is_equals else (BUTTON if is_number else BUTTON_FUNCTION)
-        foreground = "#101010" if is_equals else TEXT
+        # На Mac используйте более темный текст для кнопки "=" для лучшей контрастности
+        foreground = "#1a1a1a" if is_equals else TEXT
         button = tk.Button(
             parent,
             text=label,
