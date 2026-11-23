@@ -30,8 +30,8 @@ class CalculatorApp:
         # Используется системный шрифт Windows, с которым интерфейс выглядит привычно.
         self.root.title("Калькулятор")
         self.root.configure(bg=BACKGROUND)
-        self.root.geometry("360x570")
-        self.root.minsize(320, 500)
+        self.root.geometry("360x620")
+        self.root.minsize(320, 550)
         self.root.option_add("*Font", ("Segoe UI", 11))
 
     def _create_widgets(self) -> None:
@@ -72,9 +72,12 @@ class CalculatorApp:
         # Равномерные веса позволяют кнопкам растягиваться вместе с окном.
         for column in range(4):
             grid.columnconfigure(column, weight=1, uniform="calculator")
-        for row in range(6):
+        for row in range(7):
             grid.rowconfigure(row, weight=1, uniform="calculator")
 
+        # Скобки занимают всю ширину отдельной строки.
+        self._make_button(grid, "(", "(", 0, 0, columnspan=2)
+        self._make_button(grid, ")", ")", 0, 2, columnspan=2)
         # Подписи показываются пользователю, а action передаётся вычислительному модулю.
         keys = (
             (("%", "percent"), ("CE", "clear_entry"), ("C", "clear"), ("⌫", "backspace")),
@@ -86,10 +89,11 @@ class CalculatorApp:
         )
         for row, key_row in enumerate(keys):
             for column, (label, action) in enumerate(key_row):
-                self._make_button(grid, label, action, row, column)
+                self._make_button(grid, label, action, row + 1, column)
 
     def _make_button(
-        self, parent: tk.Frame, label: str, action: str, row: int, column: int
+        self, parent: tk.Frame, label: str, action: str, row: int, column: int,
+        columnspan: int = 1,
     ) -> None:
         """Создаёт и размещает одну кнопку с её визуальным оформлением."""
         # Цифровые клавиши и "=" выделяются цветом, функциональные остаются темнее.
@@ -111,7 +115,7 @@ class CalculatorApp:
             cursor="hand2",
             takefocus=False,
         )
-        button.grid(row=row, column=column, sticky="nsew", padx=3, pady=3)
+        button.grid(row=row, column=column, columnspan=columnspan, sticky="nsew", padx=3, pady=3)
         if not is_equals:
             hover = BUTTON_HOVER if is_number else "#353535"
             # Значения по умолчанию сохраняют цвет и кнопку именно этой итерации.
@@ -132,6 +136,8 @@ class CalculatorApp:
             self._press(char)
         elif char in "+-*/%" and char:
             self._press("%" if char == "%" else char)
+        elif char in "()" and char:
+            self._press(char)
         elif char == "." or key == "KP_Decimal":
             self._press("decimal")
         elif key in ("Return", "KP_Enter", "equal"):
@@ -157,6 +163,8 @@ class CalculatorApp:
             calculator.enter_decimal()
         elif action in ("+", "-", "*", "/"):
             calculator.set_operator(action)
+        elif action in ("(", ")"):
+            calculator.enter_parenthesis(action)
         elif action == "equals":
             calculator.equals()
         elif action == "percent":

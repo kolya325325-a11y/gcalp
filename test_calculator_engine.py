@@ -1,13 +1,16 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from calculator_engine import Calculator
+from calculator_ui import CalculatorApp
 
 
 class CalculatorChainedOperationsTests(unittest.TestCase):
     def test_chains_operations_before_equals(self) -> None:
         """Проверяет последовательный ввод операций без промежуточного "="."""
         calculator = Calculator()
-        # Кнопочный калькулятор выполняет цепочку слева направо: (5 + 6) - 7.
+        # Операции одинакового приоритета выполняются слева направо.
         for key in ("5", "+", "6", "-", "7", "="):
             if key.isdigit():
                 calculator.enter_digit(key)
@@ -18,6 +21,98 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
 
         self.assertEqual(calculator.display, "4")
         self.assertEqual(calculator.expression, "5 + 6 − 7")
+
+    def test_precedence_and_parentheses(self) -> None:
+        """Проверяет приоритет операторов, скобки и их вложенность."""
+        # Проверяем также левую ассоциативность умножения и деления.
+        cases = {
+            "2+3*4=": "14",
+            "(2+3)*4=": "20",
+            "2*(3+(4*5))=": "46",
+            "20/5*2=": "8",
+            "2(3+4)=": "14",
+            "(2+3)(4+1)=": "25",
+        }
+        for expression, expected in cases.items():
+            with self.subTest(expression=expression):
+                calculator = Calculator()
+                for key in expression:
+                    if key.isdigit():
+                        calculator.enter_digit(key)
+                    elif key in "+-*/":
+                        calculator.set_operator(key)
+                    elif key in "()":
+                        calculator.enter_parenthesis(key)
+                    else:
+                        calculator.equals()
+                self.assertEqual(calculator.display, expected)
+
+    def test_invalid_expression_and_division_by_zero(self) -> None:
+        """Показывает ошибку при неверных скобках и делении на ноль."""
+        # После ошибки новый ввод начинает новое вычисление.
+        calculator = Calculator()
+        calculator.enter_parenthesis(")")
+        self.assertTrue(calculator.error)
+        calculator.clear()
+        calculator.enter_parenthesis("(")
+        calculator.enter_parenthesis(")")
+        self.assertTrue(calculator.error)
+        calculator.clear()
+        calculator.enter_parenthesis("(")
+        calculator.enter_digit("2")
+        calculator.equals()
+        self.assertTrue(calculator.error)
+        calculator.enter_digit("8")
+        calculator.set_operator("/")
+        calculator.enter_digit("0")
+        calculator.equals()
+        self.assertTrue(calculator.error)
+        calculator.enter_digit("3")
+        self.assertEqual(calculator.display, "3")
+        self.assertFalse(calculator.error)
+
+    def test_percent_unary_and_repeated_equals(self) -> None:
+        """Сохраняет работу процентов, унарных операций и повторного равенства."""
+        # 200 + 10% равно 220; повторное равенство снова прибавляет 20.
+        calculator = Calculator()
+        for digit in "200":
+            calculator.enter_digit(digit)
+        calculator.set_operator("+")
+        for digit in "10":
+            calculator.enter_digit(digit)
+        calculator.percent()
+        calculator.equals()
+        self.assertEqual(calculator.display, "220")
+        calculator.equals()
+        self.assertEqual(calculator.display, "240")
+        calculator.clear()
+        calculator.enter_digit("2")
+        calculator.set_operator("+")
+        calculator.enter_digit("3")
+        calculator.unary("square")
+        calculator.equals()
+        self.assertEqual(calculator.display, "11")
+        # Унарная операция после закрывающей скобки применяется ко всей группе.
+        calculator.clear()
+        calculator.enter_digit("2")
+        calculator.set_operator("*")
+        calculator.enter_parenthesis("(")
+        calculator.enter_digit("3")
+        calculator.set_operator("+")
+        calculator.enter_digit("1")
+        calculator.enter_parenthesis(")")
+        calculator.unary("square")
+        calculator.equals()
+        self.assertEqual(calculator.display, "32")
+
+    def test_keyboard_parentheses(self) -> None:
+        """Передаёт клавиши скобок в общий обработчик действий."""
+        # Проверка не создаёт окно Tkinter и работает без графического окружения.
+        app = CalculatorApp.__new__(CalculatorApp)
+        app._press = Mock()
+        for char in "()":
+            self.assertEqual(app._on_key(SimpleNamespace(char=char, keysym=char)), "break")
+            app._press.assert_called_with(char)
 
 
 if __name__ == "__main__":
