@@ -4,6 +4,7 @@ import math
 class Calculator:
     def __init__(self) -> None:
         self.display = "0"
+        self.expression = ""
         self.stored_value: float | None = None
         self.pending_operator: str | None = None
         self.replace_display = True
@@ -17,32 +18,44 @@ class Calculator:
             self.clear()
         if self.replace_display:
             if self.pending_operator is None:
+                self.expression = ""
                 self.last_operator = None
                 self.last_operand = None
             self.transformed_operand = False
             self.display = digit
             self.replace_display = False
+            self._update_expression_operand()
             return
         if len(self.display) < 16:
             self.display = digit if self.display == "0" else self.display + digit
+            self._update_expression_operand()
 
     def enter_decimal(self) -> None:
         if self.error:
             self.clear()
         if self.replace_display:
             if self.pending_operator is None:
+                self.expression = ""
                 self.last_operator = None
                 self.last_operand = None
             self.transformed_operand = False
             self.display = "0."
             self.replace_display = False
+            self._update_expression_operand()
         elif "." not in self.display:
             self.display += "."
+            self._update_expression_operand()
 
     def set_operator(self, operator: str) -> None:
         if self.error:
             self.clear()
         current = self._value()
+        if self.pending_operator is None:
+            self.expression = self._format(current)
+        elif self.replace_display and not self.transformed_operand:
+            previous_symbol = self._operator_symbol(self.pending_operator)
+            self.expression = self.expression.removesuffix(f" {previous_symbol}")
+        self.expression += f" {self._operator_symbol(operator)}"
         if self.pending_operator is not None and not self.replace_display:
             current = self._calculate(self.stored_value, current, self.pending_operator)
             if self.error:
@@ -62,6 +75,7 @@ class Calculator:
             operand = self._value()
             if self.replace_display and not self.transformed_operand:
                 operand = self.stored_value if self.stored_value is not None else operand
+                self._update_expression_operand(self._format(operand))
             operator = self.pending_operator
             result = self._calculate(self.stored_value, operand, operator)
             if self.error:
@@ -92,6 +106,7 @@ class Calculator:
         self.display = self._format(current)
         self.replace_display = True
         self.transformed_operand = self.pending_operator is not None
+        self._update_expression_operand()
 
     def toggle_sign(self) -> None:
         if self.error:
@@ -100,6 +115,7 @@ class Calculator:
         self.display = self._format(value)
         self.replace_display = False
         self.transformed_operand = self.pending_operator is not None
+        self._update_expression_operand()
 
     def unary(self, operation: str) -> None:
         if self.error:
@@ -122,6 +138,7 @@ class Calculator:
         self.display = self._format(result)
         self.replace_display = True
         self.transformed_operand = self.pending_operator is not None
+        self._update_expression_operand()
 
     def backspace(self) -> None:
         if self.error:
@@ -130,15 +147,18 @@ class Calculator:
             self.display = self.display[:-1] or "0"
             if self.display == "-":
                 self.display = "0"
+            self._update_expression_operand()
 
     def clear_entry(self) -> None:
         self.display = "0"
         self.replace_display = True
         self.transformed_operand = False
         self.error = False
+        self._update_expression_operand()
 
     def clear(self) -> None:
         self.display = "0"
+        self.expression = ""
         self.stored_value = None
         self.pending_operator = None
         self.replace_display = True
@@ -149,6 +169,21 @@ class Calculator:
 
     def _value(self) -> float:
         return float(self.display)
+
+    def _update_expression_operand(self, value: str | None = None) -> None:
+        if self.pending_operator is None:
+            return
+        operand = self.display if value is None else value
+        suffix = f" {self._operator_symbol(self.pending_operator)}"
+        if self.expression.endswith(suffix):
+            self.expression += f" {operand}"
+        else:
+            prefix = self.expression.rsplit(" ", 1)[0]
+            self.expression = f"{prefix} {operand}"
+
+    @staticmethod
+    def _operator_symbol(operator: str) -> str:
+        return {"+": "+", "-": "−", "*": "×", "/": "÷"}[operator]
 
     def _calculate(self, left: float | None, right: float, operator: str) -> float:
         if left is None:

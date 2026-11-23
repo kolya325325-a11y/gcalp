@@ -156,24 +156,10 @@ class CalculatorApp:
     def _refresh_display(self) -> None:
         calculator = self.calculator
         self.result.set(calculator.display)
-        self.expression.set(
-            f"{self._format_expression_number(calculator.stored_value)} "
-            f"{self._operator_symbol(calculator.pending_operator)}"
-            if calculator.pending_operator is not None
-            and calculator.stored_value is not None
-            else ""
-        )
+        self.expression.set(calculator.expression)
         self.result_label.configure(
             fg="#ff6b6b" if calculator.error else TEXT
         )
-
-    @staticmethod
-    def _operator_symbol(operator: str | None) -> str:
-        return {"+": "+", "-": "−", "*": "×", "/": "÷"}.get(operator, "")
-
-    @staticmethod
-    def _format_expression_number(value: float | None) -> str:
-        return f"{value:.12g}" if value is not None else ""
 
     def _fit_result(self, event: tk.Event) -> None:
         size = 36 if len(self.calculator.display) <= 10 else max(
