@@ -5,7 +5,9 @@ from calculator_engine import Calculator
 
 class CalculatorChainedOperationsTests(unittest.TestCase):
     def test_chains_operations_before_equals(self) -> None:
+        """Проверяет последовательный ввод операций без промежуточного "="."""
         calculator = Calculator()
+        # Кнопочный калькулятор выполняет цепочку слева направо: (5 + 6) - 7.
         for key in ("5", "+", "6", "-", "7", "="):
             if key.isdigit():
                 calculator.enter_digit(key)
