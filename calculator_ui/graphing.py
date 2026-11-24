@@ -73,10 +73,18 @@ def draw_graph(app: object) -> None:
             continue
         color = GRAPH_COLORS[position % len(GRAPH_COLORS)]
         points: list[float] = []
+        valid_samples = 0
         try:
             for index in range(samples + 1):
                 x_value = x_min + (x_max - x_min) * index / samples
-                y_value = app.calculator.evaluate_graph(expression, x_value)
+                try:
+                    y_value = app.calculator.evaluate_graph(expression, x_value)
+                except (ArithmeticError, ValueError, RecursionError):
+                    if len(points) >= 4:
+                        canvas.create_line(*points, fill=color, width=2, smooth=True)
+                    points = []
+                    continue
+                valid_samples += 1
                 if not math.isfinite(y_value) or abs(y_value) > (y_max - y_min) * 4:
                     if len(points) >= 4:
                         canvas.create_line(*points, fill=color, width=2, smooth=True)
@@ -86,7 +94,10 @@ def draw_graph(app: object) -> None:
                 points.extend((px, py))
             if len(points) >= 4:
                 canvas.create_line(*points, fill=color, width=2, smooth=True)
-            plotted += 1
+            if valid_samples:
+                plotted += 1
+            else:
+                errors += 1
         except (ArithmeticError, SyntaxError, ValueError, RecursionError):
             errors += 1
     status = f"Построено графиков: {plotted}"

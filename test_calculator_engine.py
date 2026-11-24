@@ -229,6 +229,7 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         """Проверяет безопасное вычисление функций графика для значения x."""
         calculator = Calculator()
         self.assertEqual(calculator.evaluate_graph("x^2 + 2*x", 3), 15)
+        self.assertEqual(calculator.evaluate_graph("sprt(x)", 9), 3)
         self.assertAlmostEqual(
             calculator.evaluate_graph("cos(5*8)+5", 0),
             math.cos(math.radians(40)) + 5,

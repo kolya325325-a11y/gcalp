@@ -1,9 +1,12 @@
 import tkinter as tk
 import unittest
 from tkinter import ttk
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from calculator_engine import GraphingCalculator
 from calculator_ui.common import CalculatorApp
+from calculator_ui.graphing import draw_graph
 
 
 class MacButtonTests(unittest.TestCase):
@@ -56,6 +59,31 @@ class MacButtonTests(unittest.TestCase):
             self.app._show_mode_menu()
         self.assertEqual(menu.call_args.kwargs, {"tearoff": False})
         self.assertEqual(menu.return_value.add_command.call_count, 3)
+
+
+class GraphDrawingTests(unittest.TestCase):
+    def test_sqrt_graph_skips_out_of_domain_samples(self) -> None:
+        canvas = Mock()
+        canvas.winfo_width.return_value = 400
+        canvas.winfo_height.return_value = 300
+        expression = Mock()
+        expression.get.return_value = "sprt(x)"
+        app = SimpleNamespace(
+            graph_canvas=canvas,
+            graph_x_min=-10.0,
+            graph_x_max=10.0,
+            graph_y_min=-10.0,
+            graph_y_max=10.0,
+            graph_expressions=[expression],
+            calculator=GraphingCalculator(),
+            graph_status=Mock(),
+            _graph_tick_step=lambda _span: 5.0,
+            _format_tick=str,
+        )
+
+        draw_graph(app)
+
+        app.graph_status.set.assert_called_once_with("Построено графиков: 1")
 
 
 class OtherPlatformButtonTests(unittest.TestCase):

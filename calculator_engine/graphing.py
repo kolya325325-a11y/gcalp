@@ -48,12 +48,14 @@ class GraphingCalculator(EngineeringCalculator):
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
-            and node.func.id in FUNCTIONS
             and len(node.args) == 1
             and not node.keywords
         ):
+            function_name = {"sprt": "sqrt"}.get(node.func.id, node.func.id)
+            if function_name not in FUNCTIONS:
+                raise ValueError("Unsupported graph expression")
             return self._apply_function(
-                node.func.id, self._evaluate_graph_node(node.args[0], x_value)
+                function_name, self._evaluate_graph_node(node.args[0], x_value)
             )
         raise ValueError("Unsupported graph expression")
 
