@@ -238,6 +238,7 @@ class BaseCalculator:
 
     def clear_history(self) -> None:
         """Очищает историю, не изменяя текущее вычисление."""
+        # История очищается отдельно, чтобы текущий результат остался на экране.
         self.history.clear()
 
     def _update_operand(self) -> None:
