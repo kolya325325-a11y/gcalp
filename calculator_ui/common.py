@@ -1,5 +1,7 @@
 import tkinter as tk
 import math
+from tkinter import ttk
+from typing import Any
 
 from calculator_engine import GraphingCalculator
 from .engineering import ENGINEERING_KEYS
@@ -39,6 +41,10 @@ class CalculatorApp:
         self.graph_y_min = -10.0
         self.graph_y_max = 10.0
         self.history_window: tk.Toplevel | None = None
+        self._button_styles: dict[tuple, str] = {}
+        if IS_MAC:
+            self._button_style = ttk.Style(root)
+            self._button_style.theme_use("clam")
         self._configure_window()
         self._create_widgets()
         self._bind_keyboard()
@@ -58,7 +64,7 @@ class CalculatorApp:
         top = tk.Frame(self.root, bg=BACKGROUND, padx=14, pady=10)
         top.pack(fill="x")
 
-        menu_button = tk.Button(
+        menu_button = self._button(
             top, text="☰", command=self._show_mode_menu, bg=BACKGROUND,
             fg=TEXT, activebackground=BUTTON_HOVER, activeforeground=TEXT,
             relief="flat", bd=0, font=("Segoe UI", 16), cursor="hand2",
@@ -69,7 +75,7 @@ class CalculatorApp:
             top, textvariable=self.mode, bg=BACKGROUND, fg=TEXT,
             font=("Segoe UI Semibold", 12),
         ).pack(side="left")
-        tk.Button(
+        self._button(
             top, text="История", command=self._show_history,
             bg=BACKGROUND, fg=MUTED, activebackground=BUTTON_HOVER,
             activeforeground=TEXT, relief="flat", bd=0,
@@ -111,12 +117,12 @@ class CalculatorApp:
 
         controls = tk.Frame(self.graph_frame, bg=BACKGROUND)
         controls.pack(fill="x", pady=(0, 8))
-        tk.Button(
+        self._button(
             controls, text="+ Добавить график", command=self._add_graph,
             bg=BUTTON_FUNCTION, fg=TEXT, activebackground=BUTTON_HOVER,
             relief="flat", bd=0, font=("Segoe UI", 11), cursor="hand2",
         ).pack(side="left", padx=(0, 5), ipadx=7, ipady=2)
-        tk.Button(
+        self._button(
             controls, text="Построить", command=self._plot_graph,
             bg=ACCENT, fg="#1a1a1a", activebackground=BUTTON_HOVER,
             relief="flat", bd=0, font=("Segoe UI Semibold", 11),
@@ -126,7 +132,7 @@ class CalculatorApp:
         function_buttons = tk.Frame(self.graph_frame, bg=BACKGROUND)
         function_buttons.pack(fill="x", pady=(0, 8))
         for label in GRAPH_FUNCTION_BUTTONS:
-            tk.Button(
+            self._button(
                 function_buttons, text=label,
                 command=lambda value=label: self._insert_graph_text(value),
                 bg=BUTTON_FUNCTION, fg=TEXT, activebackground=BUTTON_HOVER,
@@ -136,7 +142,7 @@ class CalculatorApp:
         number_buttons = tk.Frame(self.graph_frame, bg=BACKGROUND)
         number_buttons.pack(fill="x", pady=(0, 8))
         for label in GRAPH_NUMBER_BUTTONS:
-            tk.Button(
+            self._button(
                 number_buttons, text=label,
                 command=lambda value=label: self._insert_graph_text(value),
                 bg=BUTTON, fg=TEXT, activebackground=BUTTON_HOVER,
@@ -150,12 +156,12 @@ class CalculatorApp:
             ("+", lambda: self._zoom_graph(0.8)),
             ("Сбросить вид", self._reset_graph_view),
         ):
-            tk.Button(
+            self._button(
                 toolbar, text=label, command=command, bg=BUTTON_FUNCTION,
                 fg=TEXT, activebackground=BUTTON_HOVER, relief="flat", bd=0,
                 font=("Segoe UI", 11), cursor="hand2",
             ).pack(side="left", padx=(0, 5), ipadx=7, ipady=2)
-        self.graph_angle_button = tk.Button(
+        self.graph_angle_button = self._button(
             toolbar, text=self.calculator.angle_mode,
             command=self._toggle_graph_angle, bg=BUTTON_FUNCTION,
             fg=TEXT, activebackground=BUTTON_HOVER, relief="flat", bd=0,
@@ -200,7 +206,7 @@ class CalculatorApp:
             if self.graph_active_entry is None and index == 1:
                 self.graph_active_entry = entry
             if len(self.graph_expressions) > 1:
-                tk.Button(
+                self._button(
                     row, text="×",
                     command=lambda position=index - 1: self._remove_graph(position),
                     bg=BUTTON_FUNCTION, fg=TEXT, activebackground=BUTTON_HOVER,
@@ -329,11 +335,12 @@ class CalculatorApp:
                 column += 1
 
     def _show_mode_menu(self) -> None:
-        """Показывает меню переключения между стандартным и инженерным режимами."""
-        menu = tk.Menu(
-            self.root, tearoff=False, bg=BUTTON_FUNCTION, fg=TEXT,
-            activebackground=BUTTON_HOVER, activeforeground=TEXT,
-        )
+        """Показывает меню переключения режимов."""
+        menu_options = {} if IS_MAC else {
+            "bg": BUTTON_FUNCTION, "fg": TEXT,
+            "activebackground": BUTTON_HOVER, "activeforeground": TEXT,
+        }
+        menu = tk.Menu(self.root, tearoff=False, **menu_options)
         menu.add_command(label="Стандартный", command=lambda: self._set_mode("Стандартный"))
         menu.add_command(label="Инженерный", command=lambda: self._set_mode("Инженерный"))
         menu.add_command(label="Графический", command=lambda: self._set_mode("Графический"))
@@ -370,7 +377,7 @@ class CalculatorApp:
         )
         self.history_list.pack(side="left", fill="both", expand=True)
         scrollbar.configure(command=self.history_list.yview)
-        tk.Button(
+        self._button(
             window, text="Очистить историю", command=self._clear_history,
             bg=BUTTON_FUNCTION, fg=TEXT, activebackground=BUTTON_HOVER,
             relief="flat", bd=0, font=("Segoe UI", 10), cursor="hand2",
@@ -417,6 +424,32 @@ class CalculatorApp:
             self.root.minsize(320, 550 if mode == "Стандартный" else 650)
             self._render_keys()
 
+    def _button(self, parent: tk.Misc, **options: Any) -> tk.Button | ttk.Button:
+        if not IS_MAC:
+            return tk.Button(parent, **options)
+
+        background = options.pop("bg")
+        foreground = options.pop("fg")
+        active_background = options.pop("activebackground")
+        active_foreground = options.pop("activeforeground", TEXT)
+        font = options.pop("font")
+        options.pop("relief")
+        options.pop("bd")
+        key = (background, foreground, active_background, active_foreground, font)
+        if key not in self._button_styles:
+            style = f"Calculator{len(self._button_styles)}.TButton"
+            self._button_style.configure(
+                style, background=background, foreground=foreground,
+                font=font, borderwidth=0, padding=0, width=0,
+            )
+            self._button_style.map(
+                style,
+                background=[("active", active_background)],
+                foreground=[("active", active_foreground)],
+            )
+            self._button_styles[key] = style
+        return ttk.Button(parent, style=self._button_styles[key], **options)
+
     def _make_button(
         self, parent: tk.Frame, label: str, action: str, row: int, column: int,
         columnspan: int = 1,
@@ -428,7 +461,7 @@ class CalculatorApp:
         color = ACCENT if is_equals else (BUTTON if is_number else BUTTON_FUNCTION)
         # На Mac используйте более темный текст для кнопки "=" для лучшей контрастности
         foreground = "#1a1a1a" if is_equals else TEXT
-        button = tk.Button(
+        button = self._button(
             parent,
             text=self.calculator.angle_mode if action == "toggle_angle" else label,
             command=lambda: self._press(action),
@@ -445,7 +478,7 @@ class CalculatorApp:
         if action == "toggle_angle":
             self.angle_button = button
         button.grid(row=row, column=column, columnspan=columnspan, sticky="nsew", padx=3, pady=3)
-        if not is_equals:
+        if not is_equals and not IS_MAC:
             hover = BUTTON_HOVER if is_number else "#353535"
             # Значения по умолчанию сохраняют цвет и кнопку именно этой итерации.
             button.bind("<Enter>", lambda _event, b=button, c=hover: b.configure(bg=c))

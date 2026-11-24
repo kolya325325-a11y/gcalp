@@ -63,10 +63,10 @@ dist/Calculator.app
 open dist/Calculator.app
 ```
 
-**Примечание:** На Mac интерфейс автоматически адаптируется к системному шрифту (Helvetica вместо Segoe UI) и использует специальные цвета для корректной видимости на macOS.
+На macOS для кнопок используется тема Tk `clam`, позволяющая задавать цвета фона и текста. Меню переключения режимов использует системные цвета.
 
 ## Тесты
 
 ```powershell
-python -m unittest -v test_calculator_engine
+python -m unittest -v test_calculator_ui test_calculator_engine
 ```
