@@ -155,6 +155,32 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         calculator.equals()
         self.assertEqual(calculator.display, "240")
 
+    def test_edit_entire_expression_and_recalculate(self) -> None:
+        calculator = Calculator()
+        calculator.set_expression("12 + 3 * 4")
+        calculator.set_expression("12 + (3 + 4) * 2")
+        calculator.equals()
+        self.assertEqual(calculator.display, "26")
+        self.assertEqual(calculator.expression, "12 + ( 3 + 4 ) × 2")
+
+        calculator.set_expression("sin(30) + 5")
+        calculator.equals()
+        self.assertEqual(calculator.display, "5.5")
+
+    def test_typed_expression_supports_implicit_multiplication_and_percent(self) -> None:
+        calculator = Calculator()
+        calculator.set_expression("2(3+4)")
+        calculator.equals()
+        self.assertEqual(calculator.display, "14")
+
+        calculator.set_expression("200+10%")
+        calculator.equals()
+        self.assertEqual(calculator.display, "220")
+
+        calculator.set_expression("2*(3+10%)")
+        calculator.equals()
+        self.assertEqual(calculator.display, "6.6")
+
         calculator.clear()
         for digit in "200":
             calculator.enter_digit(digit)
