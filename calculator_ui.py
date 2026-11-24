@@ -25,6 +25,7 @@ class CalculatorApp:
         self.calculator = Calculator()
         self.expression = tk.StringVar()
         self.result = tk.StringVar(value="0")
+        self.mode = tk.StringVar(value="Стандартный")
         self._configure_window()
         self._create_widgets()
         self._bind_keyboard()
@@ -41,15 +42,18 @@ class CalculatorApp:
 
     def _create_widgets(self) -> None:
         """Создаёт панели дисплея и сетку кнопок калькулятора."""
-        # Верхняя панель содержит режим калькулятора, дисплей и сетку кнопок.
         top = tk.Frame(self.root, bg=BACKGROUND, padx=14, pady=10)
         top.pack(fill="x")
 
+        menu_button = tk.Button(
+            top, text="☰", command=self._show_mode_menu, bg=BACKGROUND,
+            fg=TEXT, activebackground=BUTTON_HOVER, activeforeground=TEXT,
+            relief="flat", bd=0, font=("Segoe UI", 16), cursor="hand2",
+            takefocus=False,
+        )
+        menu_button.pack(side="left", padx=(2, 14))
         tk.Label(
-            top, text="☰", bg=BACKGROUND, fg=TEXT, font=("Segoe UI", 16)
-        ).pack(side="left", padx=(2, 14))
-        tk.Label(
-            top, text="Стандартный", bg=BACKGROUND, fg=TEXT,
+            top, textvariable=self.mode, bg=BACKGROUND, fg=TEXT,
             font=("Segoe UI Semibold", 12),
         ).pack(side="left")
 
@@ -72,29 +76,80 @@ class CalculatorApp:
         self.result_label.pack(fill="x")
         display.bind("<Configure>", self._fit_result)
 
-        grid = tk.Frame(self.root, bg=BACKGROUND, padx=8, pady=8)
-        grid.pack(fill="both", expand=True)
-        # Равномерные веса позволяют кнопкам растягиваться вместе с окном.
-        for column in range(4):
-            grid.columnconfigure(column, weight=1, uniform="calculator")
-        for row in range(7):
-            grid.rowconfigure(row, weight=1, uniform="calculator")
+        self.grid = tk.Frame(self.root, bg=BACKGROUND, padx=8, pady=8)
+        self.grid.pack(fill="both", expand=True)
+        self._render_keys()
 
-        # Скобки занимают всю ширину отдельной строки.
-        self._make_button(grid, "(", "(", 0, 0, columnspan=2)
-        self._make_button(grid, ")", ")", 0, 2, columnspan=2)
-        # Подписи показываются пользователю, а action передаётся вычислительному модулю.
-        keys = (
-            (("%", "percent"), ("CE", "clear_entry"), ("C", "clear"), ("⌫", "backspace")),
-            (("1/x", "reciprocal"), ("x²", "square"), ("√x", "sqrt"), ("÷", "/")),
-            (("7", "7"), ("8", "8"), ("9", "9"), ("×", "*")),
-            (("4", "4"), ("5", "5"), ("6", "6"), ("−", "-")),
-            (("1", "1"), ("2", "2"), ("3", "3"), ("+", "+")),
-            (("+/−", "sign"), ("0", "0"), (".", "decimal"), ("=", "equals")),
-        )
+    def _render_keys(self) -> None:
+        """Перестраивает сетку кнопок для выбранного режима."""
+        self.angle_button = None
+        for child in self.grid.winfo_children():
+            child.destroy()
+
+        engineering = self.mode.get() == "Инженерный"
+        columns = 6 if engineering else 4
+        for column in range(columns):
+            self.grid.columnconfigure(column, weight=1, uniform="calculator")
+        for row in range(8 if engineering else 7):
+            self.grid.rowconfigure(row, weight=1, uniform="calculator")
+
+        if not engineering:
+            self._make_button(self.grid, "(", "(", 0, 0, columnspan=2)
+            self._make_button(self.grid, ")", ")", 0, 2, columnspan=2)
+            keys = (
+                (("%", "percent"), ("CE", "clear_entry"), ("C", "clear"), ("⌫", "backspace")),
+                (("1/x", "reciprocal"), ("x²", "square"), ("√x", "sqrt"), ("÷", "/")),
+                (("7", "7"), ("8", "8"), ("9", "9"), ("×", "*")),
+                (("4", "4"), ("5", "5"), ("6", "6"), ("−", "-")),
+                (("1", "1"), ("2", "2"), ("3", "3"), ("+", "+")),
+                (("+/−", "sign"), ("0", "0"), (".", "decimal"), ("=", "equals")),
+            )
+            row_offset = 1
+        else:
+            keys = (
+                (("sin", "function_sin"), ("cos", "function_cos"),
+                 ("tan", "function_tan"), ("ln", "function_ln"),
+                 ("log", "function_log10"), ("π", "pi")),
+                (("sin⁻¹", "function_asin"), ("cos⁻¹", "function_acos"),
+                 ("tan⁻¹", "function_atan"), ("x²", "function_square"),
+                 ("x³", "function_cube"), ("e", "e")),
+                (("√x", "function_sqrt"), ("1/x", "function_reciprocal"),
+                 ("|x|", "function_abs"), ("n!", "function_factorial"),
+                 ("10ˣ", "function_ten_power"), ("eˣ", "function_exp")),
+                (("DEG", "toggle_angle"), ("%", "percent"), ("CE", "clear_entry"),
+                 ("C", "clear"), ("⌫", "backspace"), ("(", "(")),
+                ((")", ")"), ("7", "7"), ("8", "8"), ("9", "9"), ("÷", "/"), ("×", "*")),
+                (("−", "-"), ("4", "4"), ("5", "5"), ("6", "6"), ("+", "+"), ("=", "equals")),
+                (("1", "1"), ("2", "2"), ("3", "3"), ("0", "0"), (".", "decimal"),
+                 ("+/−", "sign")),
+            )
+            row_offset = 0
+
         for row, key_row in enumerate(keys):
-            for column, (label, action) in enumerate(key_row):
-                self._make_button(grid, label, action, row + 1, column)
+            column = 0
+            for label, action in key_row:
+                self._make_button(
+                    self.grid, label, action, row + row_offset, column,
+                )
+                column += 1
+
+    def _show_mode_menu(self) -> None:
+        """Показывает меню переключения между стандартным и инженерным режимами."""
+        menu = tk.Menu(
+            self.root, tearoff=False, bg=BUTTON_FUNCTION, fg=TEXT,
+            activebackground=BUTTON_HOVER, activeforeground=TEXT,
+        )
+        menu.add_command(label="Стандартный", command=lambda: self._set_mode("Стандартный"))
+        menu.add_command(label="Инженерный", command=lambda: self._set_mode("Инженерный"))
+        menu.post(self.root.winfo_rootx() + 14, self.root.winfo_rooty() + 42)
+
+    def _set_mode(self, mode: str) -> None:
+        """Переключает раскладку и сохраняет текущее состояние вычисления."""
+        if mode not in ("Стандартный", "Инженерный"):
+            raise ValueError(f"Unknown calculator mode: {mode}")
+        self.mode.set(mode)
+        self.root.minsize(320, 550 if mode == "Стандартный" else 650)
+        self._render_keys()
 
     def _make_button(
         self, parent: tk.Frame, label: str, action: str, row: int, column: int,
@@ -121,6 +176,8 @@ class CalculatorApp:
             cursor="hand2",
             takefocus=False,
         )
+        if action == "toggle_angle":
+            self.angle_button = button
         button.grid(row=row, column=column, columnspan=columnspan, sticky="nsew", padx=3, pady=3)
         if not is_equals:
             hover = BUTTON_HOVER if is_number else "#353535"
@@ -177,8 +234,14 @@ class CalculatorApp:
             calculator.percent()
         elif action == "sign":
             calculator.toggle_sign()
+        elif action == "toggle_angle":
+            calculator.toggle_angle_mode()
+        elif action.startswith("function_"):
+            calculator.enter_function(action.removeprefix("function_"))
         elif action in ("reciprocal", "square", "sqrt"):
             calculator.unary(action)
+        elif action in ("pi", "e"):
+            calculator.constant(action)
         elif action == "backspace":
             calculator.backspace()
         elif action == "clear_entry":
@@ -196,6 +259,8 @@ class CalculatorApp:
         self.result_label.configure(
             fg="#ff6b6b" if calculator.error else TEXT
         )
+        if self.angle_button is not None:
+            self.angle_button.configure(text=calculator.angle_mode)
 
     def _fit_result(self, event: tk.Event) -> None:
         """Подбирает размер шрифта результата при изменении размера окна."""

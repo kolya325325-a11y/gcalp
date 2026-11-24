@@ -5,6 +5,26 @@ import operator
 
 OPERATORS = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv}
 SYMBOLS = {"+": "+", "-": "−", "*": "×", "/": "÷"}
+FUNCTIONS = {
+    "square": lambda value: value * value,
+    "cube": lambda value: value**3,
+    "sqrt": math.sqrt,
+    "reciprocal": lambda value: 1 / value,
+    "abs": abs,
+    "sin": math.sin,
+    "cos": math.cos,
+    "tan": math.tan,
+    "asin": math.asin,
+    "acos": math.acos,
+    "atan": math.atan,
+    "ln": math.log,
+    "log10": math.log10,
+    "exp": math.exp,
+    "ten_power": lambda value: 10**value,
+    "factorial": lambda value: math.factorial(int(value))
+    if value >= 0 and value.is_integer()
+    else (_ for _ in ()).throw(ValueError("Factorial domain")),
+}
 
 
 class Calculator:
@@ -21,6 +41,7 @@ class Calculator:
         self.finished = False
         self.last_operator: str | None = None
         self.last_operand: float | None = None
+        self.angle_mode = "DEG"
 
     def enter_digit(self, digit: str) -> None:
         """Добавляет цифру к текущему числу или начинает новое число."""
@@ -105,6 +126,18 @@ class Calculator:
             return
         self._refresh_expression()
 
+    def enter_function(self, function_name: str) -> None:
+        """Добавляет вызов функции с аргументом, который будет вычислен целиком."""
+        if function_name not in FUNCTIONS:
+            raise ValueError(f"Unknown function: {function_name}")
+        if self.error or self.finished:
+            self.clear()
+        if self.tokens and self.tokens[-1] not in OPERATORS and self.tokens[-1] != "(":
+            self.tokens.append("*")
+        self.tokens.extend((function_name, "("))
+        self.replace_display = True
+        self._refresh_expression()
+
     def equals(self) -> None:
         """Вычисляет выражение или повторяет последнюю бинарную операцию."""
         if self.error:
@@ -173,23 +206,30 @@ class Calculator:
             self._set_error()
 
     def unary(self, operation: str) -> None:
-        """Вычисляет квадрат, корень или обратное значение текущего операнда."""
+        """Вычисляет унарную стандартную или инженерную операцию."""
         if self.error:
             self.clear()
         try:
             value = self._operand_value()
-            # Домен квадратного корня и деление на ноль проверяются явно.
-            if operation == "square":
-                result = value * value
-            elif operation == "sqrt":
-                result = math.sqrt(value)
-            elif operation == "reciprocal":
-                result = 1 / value
-            else:
+            if operation not in FUNCTIONS:
                 raise ValueError(f"Unknown unary operation: {operation}")
+            result = self._apply_function(operation, value)
             self._set_operand(result)
         except (ArithmeticError, ValueError, SyntaxError, RecursionError):
             self._set_error()
+
+    def toggle_angle_mode(self) -> None:
+        """Переключает единицы измерения тригонометрических функций."""
+        self.angle_mode = "RAD" if self.angle_mode == "DEG" else "DEG"
+
+    def constant(self, name: str) -> None:
+        """Подставляет математическую константу в текущий операнд."""
+        constants = {"pi": math.pi, "e": math.e}
+        if name not in constants:
+            raise ValueError(f"Unknown constant: {name}")
+        if self.error or self.finished:
+            self.clear()
+        self._set_operand(constants[name])
 
     def backspace(self) -> None:
         """Удаляет последний символ текущего числа."""
@@ -246,7 +286,7 @@ class Calculator:
             elif self.tokens[index] == "(":
                 depth -= 1
                 if depth == 0:
-                    return index
+                    return index - 1 if index > 0 and self.tokens[index - 1] in FUNCTIONS else index
         raise ValueError("Unmatched parenthesis")
 
     def _operand_value(self) -> float:
@@ -278,26 +318,44 @@ class Calculator:
     @staticmethod
     def _operator_from_node(node: ast.operator) -> str:
         """Возвращает строковый оператор для поддерживаемого узла AST."""
-        # Другие узлы, включая возведение в степень, не допускаются.
+        # Возведение в степень не вводится отдельным оператором, чтобы сохранить
+        # совместимость с простым текстовым синтаксисом калькулятора.
         mapping = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}
         if type(node) not in mapping:
             raise ValueError("Unsupported operator")
         return mapping[type(node)]
 
-    @classmethod
-    def _evaluate(cls, node: ast.AST) -> float:
+    def _evaluate(self, node: ast.AST) -> float:
         """Вычисляет только числа и разрешённые арифметические узлы AST."""
         # AST обеспечивает приоритет и скобки без исполнения произвольного кода.
         if isinstance(node, ast.Constant) and type(node.value) in (int, float):
             return float(node.value)
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
-            value = cls._evaluate(node.operand)
+            value = self._evaluate(node.operand)
             return -value if isinstance(node.op, ast.USub) else value
         if isinstance(node, ast.BinOp):
-            return OPERATORS[cls._operator_from_node(node.op)](
-                cls._evaluate(node.left), cls._evaluate(node.right)
+            return OPERATORS[self._operator_from_node(node.op)](
+                self._evaluate(node.left), self._evaluate(node.right)
             )
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in FUNCTIONS
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            return self._apply_function(node.func.id, self._evaluate(node.args[0]))
         raise ValueError("Unsupported expression")
+
+    def _apply_function(self, function_name: str, value: float) -> float:
+        """Вычисляет функцию с учётом выбранной угловой единицы."""
+        if function_name in ("sin", "cos", "tan"):
+            argument = math.radians(value) if self.angle_mode == "DEG" else value
+            return FUNCTIONS[function_name](argument)
+        if function_name in ("asin", "acos", "atan"):
+            result = FUNCTIONS[function_name](value)
+            return math.degrees(result) if self.angle_mode == "DEG" else result
+        return FUNCTIONS[function_name](value)
 
     def _set_error(self) -> None:
         """Переводит калькулятор в состояние ошибки."""

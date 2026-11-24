@@ -1,3 +1,4 @@
+import math
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -104,6 +105,49 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         calculator.unary("square")
         calculator.equals()
         self.assertEqual(calculator.display, "32")
+
+    def test_engineering_operations_and_constants(self) -> None:
+        """Проверяет инженерные функции и ошибки за пределами их математического домена."""
+        cases = {
+            "sin": ("0", "0"),
+            "square": ("3", "9"),
+            "cube": ("2", "8"),
+            "log10": ("100", "2"),
+            "factorial": ("5", "120"),
+        }
+        for operation, (value, expected) in cases.items():
+            with self.subTest(operation=operation):
+                calculator = Calculator()
+                calculator.enter_digit(value)
+                calculator.unary(operation)
+                self.assertEqual(calculator.display, expected)
+
+        calculator = Calculator()
+        calculator.constant("pi")
+        self.assertEqual(calculator.display, "3.14159265359")
+        calculator.clear()
+        calculator.enter_digit("0")
+        calculator.unary("ln")
+        self.assertTrue(calculator.error)
+
+    def test_function_uses_full_expression_as_argument(self) -> None:
+        """Проверяет порядок вычисления cos(5*8)+5."""
+        calculator = Calculator()
+        calculator.enter_function("cos")
+        for key in ("5", "*", "8", ")", "+", "5"):
+            if key.isdigit():
+                calculator.enter_digit(key)
+            elif key in "+-*/":
+                calculator.set_operator(key)
+            else:
+                calculator.enter_parenthesis(key)
+        calculator.equals()
+        self.assertAlmostEqual(
+            float(calculator.display), math.cos(math.radians(40)) + 5, places=10
+        )
+
+        calculator.toggle_angle_mode()
+        self.assertEqual(calculator.angle_mode, "RAD")
 
     def test_keyboard_parentheses(self) -> None:
         """Передаёт клавиши скобок в общий обработчик действий."""
