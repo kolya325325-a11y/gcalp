@@ -1,6 +1,8 @@
 import ast
+import io
 import math
 import operator
+import tokenize
 
 
 OPERATORS = {
@@ -49,6 +51,36 @@ class BaseCalculator:
         self.last_operand: float | None = None
         self.angle_mode = "DEG"
         self.history: list[tuple[str, str]] = []
+        self._editable_expression: str | None = None
+
+    def set_expression(self, expression: str) -> None:
+        """Заменяет всё выражение текстом, введённым или отредактированным в UI."""
+        self._editable_expression = expression
+        self.expression = expression
+        self.error = False
+        self.finished = False
+        self.last_operator = None
+        self.last_operand = None
+        try:
+            self.tokens = self._parse_expression(expression)
+        except (SyntaxError, tokenize.TokenError, ValueError, RecursionError):
+            self.tokens = []
+            self.replace_display = True
+            return
+        try:
+            tree = ast.parse(" ".join(self.tokens), mode="eval").body
+            self.display = self._format(self._evaluate(tree))
+            self.replace_display = False
+        except (SyntaxError, tokenize.TokenError, ArithmeticError, ValueError, RecursionError):
+            # Незавершённое выражение является допустимым состоянием во время
+            # редактирования; ошибка показывается только при нажатии "=".
+            numeric_tokens = [
+                token for token in self.tokens
+                if token.lstrip("+-").replace(".", "", 1).isdigit()
+            ]
+            if numeric_tokens:
+                self.display = numeric_tokens[-1]
+            self.replace_display = True
 
     def enter_digit(self, digit: str) -> None:
         """Добавляет цифру к текущему числу или начинает новое число."""
@@ -136,7 +168,17 @@ class BaseCalculator:
     def equals(self) -> None:
         """Вычисляет выражение или повторяет последнюю бинарную операцию."""
         if self.error:
-            return
+            if self._editable_expression is None:
+                return
+        if self._editable_expression is not None:
+            try:
+                self.tokens = self._parse_expression(self._editable_expression)
+            except (SyntaxError, tokenize.TokenError, ValueError, RecursionError):
+                self._set_error()
+                return
+            self._editable_expression = None
+            self.finished = False
+            self.error = False
         if self.finished:
             # Повтор "=" применяет последнюю операцию к результату.
             if self.last_operator is not None and self.last_operand is not None:
@@ -235,11 +277,159 @@ class BaseCalculator:
         self.finished = False
         self.last_operator = None
         self.last_operand = None
+        self._editable_expression = None
 
     def clear_history(self) -> None:
         """Очищает историю, не изменяя текущее вычисление."""
         # История очищается отдельно, чтобы текущий результат остался на экране.
         self.history.clear()
+
+    @staticmethod
+    def _parse_expression(expression: str) -> list[str]:
+        """Безопасно разбирает текст UI в элементы выражения калькулятора."""
+        normalized = (
+            expression.replace("−", "-")
+            .replace("×", "*")
+            .replace("÷", "/")
+            .replace("^", "**")
+            .replace("π", "pi")
+        )
+        tokens: list[tuple[tokenize.TokenInfo, str]] = []
+        try:
+            for item in tokenize.generate_tokens(io.StringIO(normalized).readline):
+                if item.type in (tokenize.ENCODING, tokenize.ENDMARKER, tokenize.NEWLINE):
+                    continue
+                if item.type in (tokenize.INDENT, tokenize.DEDENT):
+                    continue
+                if item.type == tokenize.ERRORTOKEN and item.string.isspace():
+                    continue
+                if item.type not in (tokenize.NUMBER, tokenize.NAME, tokenize.OP):
+                    raise ValueError("Unsupported expression token")
+                if item.type == tokenize.NAME and item.string not in {
+                    *FUNCTIONS,
+                    "percent",
+                    "pi",
+                    "e",
+                }:
+                    raise ValueError("Unknown function or constant")
+                if item.type == tokenize.OP and item.string not in (
+                    "+", "-", "*", "/", "**", "%", "(", ")", ","
+                ):
+                    raise ValueError("Unsupported operator")
+                tokens.append((item, item.string))
+        except (IndentationError, tokenize.TokenError) as error:
+            raise SyntaxError("Incomplete expression") from error
+
+        result = BaseCalculator._expand_percent_tokens([value for _, value in tokens])
+        expanded: list[tuple[tokenize.TokenInfo, str]] = []
+        for index, value in enumerate(result):
+            token_type = (
+                tokenize.NAME
+                if value.isidentifier()
+                else tokenize.NUMBER
+                if value[0].isdigit() or value[0] == "."
+                else tokenize.OP
+            )
+            synthetic = tokenize.TokenInfo(token_type, value, (1, 0), (1, 0), "")
+            expanded.append((synthetic, value))
+
+        result = []
+        for index, (item, value) in enumerate(expanded):
+            if result and index > 0 and BaseCalculator._needs_implicit_multiplication(
+                expanded[index - 1], (item, value)
+            ):
+                result.append("*")
+            result.append(value)
+        if not result:
+            raise SyntaxError("Empty expression")
+        return result
+
+    @staticmethod
+    def _expand_percent_tokens(tokens: list[str]) -> list[str]:
+        """Преобразует постфиксный процент в безопасный вызов percent()."""
+        while "%" in tokens:
+            percent_index = tokens.index("%")
+            if percent_index == 0:
+                raise SyntaxError("Percent without operand")
+            start = percent_index - 1
+            if tokens[start] == ")":
+                depth = 1
+                start -= 1
+                while start >= 0 and depth:
+                    if tokens[start] == ")":
+                        depth += 1
+                    elif tokens[start] == "(":
+                        depth -= 1
+                    start -= 1
+                start += 1
+                if start > 0 and tokens[start - 1] in FUNCTIONS:
+                    start -= 1
+            elif tokens[start] not in OPERATORS and tokens[start] not in ("(", ","):
+                start = percent_index - 1
+            else:
+                raise SyntaxError("Percent without operand")
+
+            operand = tokens[start:percent_index]
+            base_operator = start - 1
+            replacement = ["percent", "(", *operand]
+            if base_operator >= 0 and tokens[base_operator] in ("+", "-"):
+                base_start = BaseCalculator._percent_base_start(tokens, base_operator)
+                base = tokens[base_start:base_operator]
+                replacement.extend((",", "(", *base, ")"))
+            replacement.append(")")
+            tokens[start:percent_index + 1] = replacement
+        return tokens
+
+    @staticmethod
+    def _percent_base_start(tokens: list[str], operator_index: int) -> int:
+        """Находит начало базы процента в ближайшей незакрытой группе."""
+        depth = 0
+        for index in range(operator_index - 1, -1, -1):
+            if tokens[index] == ")":
+                depth += 1
+            elif tokens[index] == "(":
+                if depth == 0:
+                    return index + 1
+                depth -= 1
+        return 0
+
+    @staticmethod
+    def _needs_implicit_multiplication(
+        previous: tuple[tokenize.TokenInfo, str],
+        current: tuple[tokenize.TokenInfo, str],
+    ) -> bool:
+        """Определяет неявное умножение, например 2(3) или 2π."""
+        previous_type, previous_value = previous[0].type, previous[1]
+        current_type, current_value = current[0].type, current[1]
+        previous_is_constant = (
+            previous_type == tokenize.NAME and previous_value in ("pi", "e")
+        )
+        current_is_constant = (
+            current_type == tokenize.NAME and current_value in ("pi", "e")
+        )
+        current_is_function = (
+            current_type == tokenize.NAME and current_value in FUNCTIONS
+        )
+
+        return (
+            previous_type == tokenize.NUMBER
+            and (current_value == "(" or current_is_constant or current_is_function)
+        ) or (
+            previous_value == ")"
+            and (
+                current_type == tokenize.NUMBER
+                or current_value == "("
+                or current_type == tokenize.NAME
+            )
+        ) or (
+            previous_is_constant
+            and (
+                current_type == tokenize.NUMBER
+                or current_value == "("
+                or current_is_constant
+                or current_is_function
+            )
+        )
 
     def _update_operand(self) -> None:
         """Добавляет или заменяет редактируемый числовой операнд."""
@@ -289,6 +479,7 @@ class BaseCalculator:
     def _refresh_expression(self) -> None:
         """Обновляет строку выражения для интерфейса."""
         # Внутренние операторы заменяются на удобные для отображения символы.
+        self._editable_expression = None
         self.expression = " ".join(SYMBOLS.get(token, token) for token in self.tokens)
 
     @staticmethod
@@ -312,6 +503,8 @@ class BaseCalculator:
         # AST обеспечивает приоритет и скобки без исполнения произвольного кода.
         if isinstance(node, ast.Constant) and type(node.value) in (int, float):
             return float(node.value)
+        if isinstance(node, ast.Name) and node.id in ("pi", "e"):
+            return math.pi if node.id == "pi" else math.e
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
             value = self._evaluate(node.operand)
             return -value if isinstance(node.op, ast.USub) else value

@@ -70,6 +70,41 @@ class MacButtonTests(unittest.TestCase):
         self.assertEqual(entry.get(), "si(x)")
         self.assertEqual(entry.index(tk.INSERT), 2)
 
+    def test_calculator_expression_edits_at_cursor_and_recalculates(self) -> None:
+        entry = self.app.expression_entry
+        entry.delete(0, tk.END)
+        entry.insert(0, "12+34")
+        entry.selection_range(2, 3)
+
+        self.app._press("*")
+
+        self.assertEqual(entry.get(), "12×34")
+        self.assertEqual(entry.index(tk.INSERT), 3)
+        self.app._press("equals")
+        self.assertEqual(self.app.calculator.display, "408")
+
+    def test_calculator_backspace_deletes_before_cursor(self) -> None:
+        entry = self.app.expression_entry
+        entry.delete(0, tk.END)
+        entry.insert(0, "4+(5×6)")
+        entry.icursor(4)
+
+        self.app._backspace_calculator_text()
+
+        self.assertEqual(entry.get(), "4+(×6)")
+        self.assertEqual(entry.index(tk.INSERT), 3)
+
+    def test_calculator_delete_removes_selection_or_next_character(self) -> None:
+        entry = self.app.expression_entry
+        entry.delete(0, tk.END)
+        entry.insert(0, "7+8×9")
+        entry.selection_range(2, 4)
+
+        self.app._delete_calculator_text()
+
+        self.assertEqual(entry.get(), "7+9")
+        self.assertEqual(entry.index(tk.INSERT), 2)
+
 
 class GraphDrawingTests(unittest.TestCase):
     def test_sqrt_graph_skips_out_of_domain_samples(self) -> None:

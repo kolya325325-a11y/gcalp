@@ -90,10 +90,15 @@ class CalculatorApp:
             display, text="Калькулятор", bg=BACKGROUND, fg=TEXT,
             anchor="w", font=("Segoe UI Semibold", 16),
         ).pack(fill="x", pady=(0, 20))
-        tk.Label(
+        self.expression_entry = tk.Entry(
             display, textvariable=self.expression, bg=BACKGROUND, fg=MUTED,
-            anchor="e", font=("Segoe UI", 12), height=1,
-        ).pack(fill="x", pady=(0, 4))
+            insertbackground=TEXT, justify="right", relief="flat", bd=0,
+            highlightthickness=0, font=("Segoe UI", 12),
+        )
+        self.expression_entry.pack(fill="x", pady=(0, 4))
+        self.expression_entry.bind("<KeyRelease>", self._sync_expression_edit)
+        self.expression_entry.bind("<Return>", self._evaluate_expression_edit)
+        self.expression_entry.bind("<KP_Enter>", self._evaluate_expression_edit)
 
         self.result_label = tk.Label(
             display, textvariable=self.result, bg=BACKGROUND, fg=TEXT,
@@ -505,6 +510,12 @@ class CalculatorApp:
 
     def _on_key(self, event: tk.Event) -> str | None:
         """Преобразует нажатие клавиши в действие калькулятора."""
+        if (
+            hasattr(self, "expression_entry")
+            and getattr(event, "widget", None) is self.expression_entry
+            and event.keysym not in ("Return", "KP_Enter", "Escape")
+        ):
+            return None
         char = event.char
         key = event.keysym
         # Клавиатурный ввод использует те же действия, что и кнопки интерфейса.
@@ -523,7 +534,10 @@ class CalculatorApp:
         elif key == "Escape":
             self._press("clear")
         elif key == "Delete":
-            self._press("clear_entry")
+            if hasattr(self, "expression_entry"):
+                self._delete_calculator_text()
+            else:
+                self._press("clear_entry")
         else:
             return None
         # Не даём Tkinter обработать распознанное нажатие повторно.
@@ -533,6 +547,37 @@ class CalculatorApp:
         """Передаёт действие вычислителю и обновляет виджеты."""
         # Все кнопки переводятся в команды модели, затем обновляется отображение.
         calculator = self.calculator
+        direct_text = {
+            "decimal": ".",
+            "+": "+",
+            "-": "−",
+            "*": "×",
+            "/": "÷",
+            "(": "(",
+            ")": ")",
+        }
+        if hasattr(self, "expression_entry") and (
+            action.isdigit() or action in direct_text or action == "percent"
+        ):
+            self._insert_calculator_text(
+                action if action.isdigit() else "%" if action == "percent"
+                else direct_text[action]
+            )
+            return
+        if hasattr(self, "expression_entry") and (
+            action.startswith("function_") or action in ("pi", "e")
+        ):
+            function = action.removeprefix("function_")
+            self._insert_function_text(function)
+            return
+        if hasattr(self, "expression_entry") and action in (
+            "reciprocal", "square", "sqrt"
+        ) and (
+            self.expression_entry.index(tk.INSERT) != len(self.expression_entry.get())
+            or self.expression_entry.selection_present()
+        ):
+            self._insert_function_text(action)
+            return
         if action.isdigit():
             calculator.enter_digit(action)
         elif action == "decimal":
@@ -562,12 +607,108 @@ class CalculatorApp:
         elif action in ("pi", "e"):
             calculator.constant(action)
         elif action == "backspace":
+            if hasattr(self, "expression_entry"):
+                self._backspace_calculator_text()
+                return
             calculator.backspace()
         elif action == "clear_entry":
             calculator.clear_entry()
         elif action == "clear":
             calculator.clear()
         self._refresh_display()
+
+    def _sync_expression_edit(self, _event: tk.Event | None = None) -> None:
+        """Синхронизирует произвольное редактирование строки с моделью."""
+        if not hasattr(self, "expression_entry"):
+            return
+        self.calculator.set_expression(self.expression_entry.get())
+        self.result.set(self.calculator.display)
+        self.result_label.configure(
+            fg="#ff6b6b" if self.calculator.error else TEXT
+        )
+
+    def _evaluate_expression_edit(self, _event: tk.Event | None = None) -> str:
+        """Вычисляет отредактированное выражение по Enter."""
+        self._sync_expression_edit()
+        self._press("equals")
+        return "break"
+
+    def _insert_calculator_text(self, value: str) -> None:
+        """Вставляет или заменяет текст в текущей позиции курсора."""
+        entry = self.expression_entry
+        try:
+            start, end = entry.index(tk.SEL_FIRST), entry.index(tk.SEL_LAST)
+        except tk.TclError:
+            start = end = entry.index(tk.INSERT)
+        entry.delete(start, end)
+        entry.insert(start, value)
+        entry.icursor(start + len(value))
+        entry.focus_set()
+        self._sync_expression_edit()
+
+    def _backspace_calculator_text(self) -> None:
+        """Удаляет выделение или символ слева от курсора."""
+        entry = self.expression_entry
+        try:
+            start, end = entry.index(tk.SEL_FIRST), entry.index(tk.SEL_LAST)
+        except tk.TclError:
+            end = entry.index(tk.INSERT)
+            start = max(0, end - 1)
+        if start != end:
+            entry.delete(start, end)
+            entry.icursor(start)
+            self._sync_expression_edit()
+        entry.focus_set()
+
+    def _delete_calculator_text(self) -> None:
+        """Удаляет выделение или символ справа от курсора."""
+        entry = self.expression_entry
+        try:
+            start, end = entry.index(tk.SEL_FIRST), entry.index(tk.SEL_LAST)
+        except tk.TclError:
+            start = entry.index(tk.INSERT)
+            end = min(len(entry.get()), start + 1)
+        if start != end:
+            entry.delete(start, end)
+            entry.icursor(start)
+            self._sync_expression_edit()
+        entry.focus_set()
+
+    def _insert_function_text(self, function_name: str) -> None:
+        """Вставляет функцию или оборачивает выбранный фрагмент."""
+        entry = self.expression_entry
+        if function_name in ("pi", "e"):
+            value = str(math.pi) if function_name == "pi" else str(math.e)
+            self._replace_calculator_selection(value)
+            return
+        try:
+            start, end = entry.index(tk.SEL_FIRST), entry.index(tk.SEL_LAST)
+            selected = entry.get()[start:end]
+            value = f"{function_name}({selected})"
+            entry.delete(start, end)
+            entry.insert(start, value)
+            cursor = start + len(value)
+        except tk.TclError:
+            cursor = entry.index(tk.INSERT)
+            value = f"{function_name}("
+            entry.insert(cursor, value)
+            cursor += len(value)
+        entry.icursor(cursor)
+        entry.focus_set()
+        self._sync_expression_edit()
+
+    def _replace_calculator_selection(self, value: str) -> None:
+        """Заменяет выделение или вставляет константу у курсора."""
+        entry = self.expression_entry
+        try:
+            start, end = entry.index(tk.SEL_FIRST), entry.index(tk.SEL_LAST)
+        except tk.TclError:
+            start = end = entry.index(tk.INSERT)
+        entry.delete(start, end)
+        entry.insert(start, value)
+        entry.icursor(start + len(value))
+        entry.focus_set()
+        self._sync_expression_edit()
 
     def _refresh_display(self) -> None:
         """Синхронизирует текст дисплея и цвет ошибки с состоянием модели."""
