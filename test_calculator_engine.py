@@ -1,7 +1,7 @@
 import math
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 from calculator_engine import Calculator
 from calculator_ui import CalculatorApp
@@ -119,6 +119,69 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         calculator.equals()
         self.assertEqual(calculator.display, "32")
 
+    def test_standard_unary_operations_are_queued(self) -> None:
+        """Проверяет очередь стандартных унарных операций и их приоритет."""
+        cases = (
+            (("2", "+", "3", "square"), "11"),
+            (("4", "+", "9", "sqrt"), "7"),
+            (("3", "square", "reciprocal"), "0.111111111111"),
+        )
+        for keys, expected in cases:
+            with self.subTest(keys=keys):
+                calculator = Calculator()
+                for key in keys:
+                    if key.isdigit():
+                        calculator.enter_digit(key)
+                    elif key in ("+", "-", "*", "/"):
+                        calculator.set_operator(key)
+                    else:
+                        calculator.queue_unary(key)
+                self.assertIn(keys[-1], calculator.expression)
+                calculator.equals()
+                self.assertEqual(calculator.display, expected)
+
+    def test_standard_percent_is_queued_and_keeps_context(self) -> None:
+        """Проверяет отложенный процент сложения и обычный процент умножения."""
+        calculator = Calculator()
+        for digit in "200":
+            calculator.enter_digit(digit)
+        calculator.set_operator("+")
+        calculator.enter_digit("10")
+        calculator.queue_percent()
+        self.assertIn("percent", calculator.expression)
+        self.assertEqual(calculator.display, "20")
+        calculator.equals()
+        self.assertEqual(calculator.display, "220")
+        calculator.equals()
+        self.assertEqual(calculator.display, "240")
+
+        calculator.clear()
+        for digit in "200":
+            calculator.enter_digit(digit)
+        calculator.set_operator("-")
+        calculator.enter_digit("10")
+        calculator.queue_percent()
+        calculator.equals()
+        self.assertEqual(calculator.display, "180")
+
+        calculator.clear()
+        calculator.enter_digit("200")
+        calculator.set_operator("*")
+        calculator.enter_digit("10")
+        calculator.queue_percent()
+        calculator.equals()
+        self.assertEqual(calculator.display, "20")
+
+        calculator.clear()
+        calculator.enter_digit("200")
+        calculator.set_operator("+")
+        calculator.enter_digit("10")
+        calculator.queue_percent()
+        calculator.set_operator("*")
+        calculator.enter_digit("2")
+        calculator.equals()
+        self.assertEqual(calculator.display, "240")
+
     def test_engineering_operations_and_constants(self) -> None:
         """Проверяет инженерные функции и ошибки за пределами их математического домена."""
         cases = {
@@ -180,6 +243,27 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         for char in "()":
             self.assertEqual(app._on_key(SimpleNamespace(char=char, keysym=char)), "break")
             app._press.assert_called_with(char)
+
+    def test_standard_operation_buttons_use_queued_operations(self) -> None:
+        """Направляет стандартные унарные кнопки и процент в очередь."""
+        app = CalculatorApp.__new__(CalculatorApp)
+        app.calculator = Mock()
+        app.mode = SimpleNamespace(get=lambda: "Стандартный")
+        app._refresh_display = Mock()
+
+        for action, method in (
+            ("percent", "queue_percent"),
+            ("reciprocal", "queue_unary"),
+            ("square", "queue_unary"),
+            ("sqrt", "queue_unary"),
+        ):
+            app._press(action)
+
+        app.calculator.queue_percent.assert_called_once_with()
+        self.assertEqual(
+            app.calculator.queue_unary.call_args_list,
+            [call("reciprocal"), call("square"), call("sqrt")],
+        )
 
 
 if __name__ == "__main__":

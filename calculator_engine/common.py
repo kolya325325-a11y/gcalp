@@ -322,6 +322,15 @@ class BaseCalculator:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Name)
+            and node.func.id == "percent"
+            and len(node.args) in (1, 2)
+            and not node.keywords
+        ):
+            value = self._evaluate(node.args[0]) / 100
+            return value * self._evaluate(node.args[1]) if len(node.args) == 2 else value
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
             and node.func.id in FUNCTIONS
             and len(node.args) == 1
             and not node.keywords

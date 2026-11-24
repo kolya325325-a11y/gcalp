@@ -497,7 +497,10 @@ class CalculatorApp:
         elif action == "equals":
             calculator.equals()
         elif action == "percent":
-            calculator.percent()
+            if self.mode.get() == "Стандартный":
+                calculator.queue_percent()
+            else:
+                calculator.percent()
         elif action == "sign":
             calculator.toggle_sign()
         elif action == "toggle_angle":
@@ -505,7 +508,10 @@ class CalculatorApp:
         elif action.startswith("function_"):
             calculator.enter_function(action.removeprefix("function_"))
         elif action in ("reciprocal", "square", "sqrt"):
-            calculator.unary(action)
+            if self.mode.get() == "Стандартный":
+                calculator.queue_unary(action)
+            else:
+                calculator.unary(action)
         elif action in ("pi", "e"):
             calculator.constant(action)
         elif action == "backspace":
