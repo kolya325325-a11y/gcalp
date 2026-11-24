@@ -26,7 +26,7 @@ python calculator.py
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install pyinstaller
-.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean --onefile --windowed --name Calculator --distpath dist --workpath build --specpath build calculator.py
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean Calculator.spec
 ```
 
 Готовый файл появится здесь:
@@ -35,7 +35,7 @@ python -m venv .venv
 dist\Calculator.exe
 ```
 
-`--onefile` собирает программу в один исполняемый файл, а `--windowed` запускает её без консольного окна. PyInstaller нужен только для сборки и не является зависимостью запускаемого приложения.
+Файл `Calculator.spec` собирает программу в один исполняемый файл без консольного окна и добавляет весёлую иконку калькулятора в `.exe` и на панель задач. PyInstaller нужен только для сборки и не является зависимостью запускаемого приложения.
 
 ## Сборка в `.app` (macOS)
 
@@ -48,7 +48,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install pyinstaller
-python -m PyInstaller --noconfirm --clean --onefile --windowed --name Calculator --distpath dist --workpath build --specpath build calculator.py
+python -m PyInstaller --noconfirm --clean Calculator.spec
 ```
 
 Готовое приложение появится здесь:
@@ -64,6 +64,8 @@ open dist/Calculator.app
 ```
 
 На macOS для кнопок используется тема Tk `clam`, позволяющая задавать цвета фона и текста. Меню переключения режимов использует системные цвета.
+
+Файл `.app` получает ту же иконку, что и версия для Windows. Исходный PNG, ICO для Windows и ICNS для macOS находятся в папке `assets`; для пересборки достаточно запустить `Calculator.spec` на нужной системе.
 
 ## Тесты
 
