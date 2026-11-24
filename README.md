@@ -27,6 +27,7 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install pyinstaller
 .\.venv\Scripts\python.exe -m PyInstaller --noconfirm --clean Calculator.spec
+.\.venv\Scripts\python.exe check_packaged_icons.py -v
 ```
 
 Готовый файл появится здесь:
@@ -51,6 +52,7 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install pyinstaller
 python -m PyInstaller --noconfirm --clean Calculator.spec
+python check_packaged_icons.py -v
 ```
 
 Готовое приложение появится здесь:
@@ -67,7 +69,7 @@ open dist/Calculator.app
 
 На macOS для кнопок используется тема Tk `clam`, позволяющая задавать цвета фона и текста. Меню переключения режимов использует системные цвета.
 
-Файл `.app` получает ту же иконку, что и версия для Windows. Исходный PNG, ICO для Windows и ICNS для macOS находятся в папке `assets`; для пересборки достаточно запустить `Calculator.spec` на нужной системе.
+Файл `.app` получает ту же иконку, что и версия для Windows. Исходный PNG, ICO для Windows и ICNS для macOS находятся в папке `assets`; для пересборки достаточно запустить `Calculator.spec` на нужной системе. Скрипт `check_packaged_icons.py` проверяет значок непосредственно в собранном `.exe` или `.app`.
 
 После пересборки замените старую копию `Calculator.app` новым приложением из `dist`: иконка уже существующей копии сама не изменится.
 
