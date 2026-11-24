@@ -1,30 +1,31 @@
 import tkinter as tk
 import math
-import sys
 
-from calculator_engine import Calculator
-
-
-# Платформо-зависимая палитра для корректной отрисовки на разных ОС
-IS_MAC = sys.platform == "darwin"
-
-BACKGROUND = "#202020"
-# На Mac используются более светлые цвета для лучшей видимости
-BUTTON = "#323232" if not IS_MAC else "#424242"
-BUTTON_HOVER = "#3d3d3d" if not IS_MAC else "#505050"
-BUTTON_FUNCTION = "#292929" if not IS_MAC else "#353535"
-ACCENT = "#4cc2ff" if not IS_MAC else "#2196F3"
-TEXT = "#f4f4f4"
-MUTED = "#a9a9a9"
-GRAPH_COLORS = ("#4cc2ff", "#ff9f43", "#a55eea", "#26de81", "#ff6b81")
-
-
+from calculator_engine import GraphingCalculator
+from .engineering import ENGINEERING_KEYS
+from .graphing import (
+    GRAPH_COLORS,
+    GRAPH_FUNCTION_BUTTONS,
+    GRAPH_NUMBER_BUTTONS,
+    draw_graph,
+)
+from .standard import STANDARD_KEYS
+from .theme import (
+    ACCENT,
+    BACKGROUND,
+    BUTTON,
+    BUTTON_FUNCTION,
+    BUTTON_HOVER,
+    IS_MAC,
+    MUTED,
+    TEXT,
+)
 class CalculatorApp:
     def __init__(self, root: tk.Tk) -> None:
         """Создаёт интерфейс и связывает его с вычислительной моделью."""
         self.root = root
         # Интерфейс отображает состояние модели, но не выполняет арифметику сам.
-        self.calculator = Calculator()
+        self.calculator = GraphingCalculator()
         self.expression = tk.StringVar()
         self.result = tk.StringVar(value="0")
         self.mode = tk.StringVar(value="Стандартный")
@@ -124,7 +125,7 @@ class CalculatorApp:
 
         function_buttons = tk.Frame(self.graph_frame, bg=BACKGROUND)
         function_buttons.pack(fill="x", pady=(0, 8))
-        for label in ("sin(", "cos(", "tan(", "sqrt(", "ln(", "x", "^", "(", ")", "+", "−", "×", "÷"):
+        for label in GRAPH_FUNCTION_BUTTONS:
             tk.Button(
                 function_buttons, text=label,
                 command=lambda value=label: self._insert_graph_text(value),
@@ -134,7 +135,7 @@ class CalculatorApp:
 
         number_buttons = tk.Frame(self.graph_frame, bg=BACKGROUND)
         number_buttons.pack(fill="x", pady=(0, 8))
-        for label in ("7", "8", "9", "4", "5", "6", "1", "2", "3", "0", "."):
+        for label in GRAPH_NUMBER_BUTTONS:
             tk.Button(
                 number_buttons, text=label,
                 command=lambda value=label: self._insert_graph_text(value),
@@ -245,83 +246,8 @@ class CalculatorApp:
 
     def _draw_graph(self) -> None:
         """Перерисовывает сетку, оси и график функции."""
-        if not hasattr(self, "graph_canvas"):
-            return
-        width = self.graph_canvas.winfo_width()
-        height = self.graph_canvas.winfo_height()
-        if width < 40 or height < 40:
-            return
-        canvas = self.graph_canvas
-        canvas.delete("all")
-        x_min, x_max = self.graph_x_min, self.graph_x_max
-        y_min, y_max = self.graph_y_min, self.graph_y_max
-
-        def to_pixel(x_value: float, y_value: float) -> tuple[float, float]:
-            return (
-                (x_value - x_min) / (x_max - x_min) * width,
-                height - (y_value - y_min) / (y_max - y_min) * height,
-            )
-
-        step_x = self._graph_tick_step(x_max - x_min)
-        step_y = self._graph_tick_step(y_max - y_min)
-        first_x = math.ceil(x_min / step_x) * step_x
-        first_y = math.ceil(y_min / step_y) * step_y
-        tick = first_x
-        while tick <= x_max + step_x / 2:
-            px, _ = to_pixel(tick, 0)
-            canvas.create_line(px, 0, px, height, fill="#2b2b2b")
-            if abs(tick) > step_x / 100:
-                canvas.create_text(px + 3, height - 12, text=self._format_tick(tick),
-                                   fill=MUTED, anchor="w", font=("Segoe UI", 8))
-            tick += step_x
-        tick = first_y
-        while tick <= y_max + step_y / 2:
-            _, py = to_pixel(0, tick)
-            canvas.create_line(0, py, width, py, fill="#2b2b2b")
-            if abs(tick) > step_y / 100:
-                canvas.create_text(4, py - 3, text=self._format_tick(tick),
-                                   fill=MUTED, anchor="w", font=("Segoe UI", 8))
-            tick += step_y
-
-        if x_min <= 0 <= x_max:
-            px, _ = to_pixel(0, 0)
-            canvas.create_line(px, 0, px, height, fill="#8f8f8f", width=2)
-        if y_min <= 0 <= y_max:
-            _, py = to_pixel(0, 0)
-            canvas.create_line(0, py, width, py, fill="#8f8f8f", width=2)
-
-        expressions = [expression.get().strip() for expression in self.graph_expressions]
-        if not any(expressions):
-            self.graph_status.set("Добавьте функцию, например sin(x)")
-            return
-        samples = max(300, width)
-        plotted = 0
-        errors = 0
-        for position, expression in enumerate(expressions):
-            if not expression:
-                continue
-            color = GRAPH_COLORS[position % len(GRAPH_COLORS)]
-            points: list[float] = []
-            try:
-                for index in range(samples + 1):
-                    x_value = x_min + (x_max - x_min) * index / samples
-                    y_value = self.calculator.evaluate_graph(expression, x_value)
-                    if not math.isfinite(y_value) or abs(y_value) > (y_max - y_min) * 4:
-                        if len(points) >= 4:
-                            canvas.create_line(*points, fill=color, width=2, smooth=True)
-                        points = []
-                        continue
-                    px, py = to_pixel(x_value, y_value)
-                    points.extend((px, py))
-                if len(points) >= 4:
-                    canvas.create_line(*points, fill=color, width=2, smooth=True)
-                plotted += 1
-            except (ArithmeticError, SyntaxError, ValueError, RecursionError):
-                errors += 1
-        status = f"Построено графиков: {plotted}"
-        if errors:
-            status += f"; ошибок: {errors}"
-        self.graph_status.set(status)
+        if hasattr(self, "graph_canvas"):
+            draw_graph(self)
 
     @staticmethod
     def _graph_tick_step(span: float) -> float:
@@ -388,33 +314,10 @@ class CalculatorApp:
         if not engineering:
             self._make_button(self.grid, "(", "(", 0, 0, columnspan=2)
             self._make_button(self.grid, ")", ")", 0, 2, columnspan=2)
-            keys = (
-                (("%", "percent"), ("CE", "clear_entry"), ("C", "clear"), ("⌫", "backspace")),
-                (("1/x", "reciprocal"), ("x²", "square"), ("√x", "sqrt"), ("÷", "/")),
-                (("7", "7"), ("8", "8"), ("9", "9"), ("×", "*")),
-                (("4", "4"), ("5", "5"), ("6", "6"), ("−", "-")),
-                (("1", "1"), ("2", "2"), ("3", "3"), ("+", "+")),
-                (("+/−", "sign"), ("0", "0"), (".", "decimal"), ("=", "equals")),
-            )
+            keys = STANDARD_KEYS
             row_offset = 1
         else:
-            keys = (
-                (("sin", "function_sin"), ("cos", "function_cos"),
-                 ("tan", "function_tan"), ("ln", "function_ln"),
-                 ("log", "function_log10"), ("π", "pi")),
-                (("sin⁻¹", "function_asin"), ("cos⁻¹", "function_acos"),
-                 ("tan⁻¹", "function_atan"), ("x²", "function_square"),
-                 ("x³", "function_cube"), ("e", "e")),
-                (("√x", "function_sqrt"), ("1/x", "function_reciprocal"),
-                 ("|x|", "function_abs"), ("n!", "function_factorial"),
-                 ("10ˣ", "function_ten_power"), ("eˣ", "function_exp")),
-                (("DEG", "toggle_angle"), ("%", "percent"), ("CE", "clear_entry"),
-                 ("C", "clear"), ("⌫", "backspace"), ("(", "(")),
-                ((")", ")"), ("7", "7"), ("8", "8"), ("9", "9"), ("÷", "/"), ("×", "*")),
-                (("−", "-"), ("4", "4"), ("5", "5"), ("6", "6"), ("+", "+"), ("=", "equals")),
-                (("1", "1"), ("2", "2"), ("3", "3"), ("0", "0"), (".", "decimal"),
-                 ("+/−", "sign")),
-            )
+            keys = ENGINEERING_KEYS
             row_offset = 0
 
         for row, key_row in enumerate(keys):

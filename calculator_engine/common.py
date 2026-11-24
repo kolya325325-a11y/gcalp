@@ -33,8 +33,8 @@ FUNCTIONS = {
 }
 
 
-class Calculator:
-    """Хранит ввод и вычисляет выражения с приоритетом операций."""
+class BaseCalculator:
+    """Общее состояние и базовые операции всех калькуляторов."""
 
     def __init__(self) -> None:
         """Создаёт начальное состояние калькулятора."""
@@ -133,18 +133,6 @@ class Calculator:
             return
         self._refresh_expression()
 
-    def enter_function(self, function_name: str) -> None:
-        """Добавляет вызов функции с аргументом, который будет вычислен целиком."""
-        if function_name not in FUNCTIONS:
-            raise ValueError(f"Unknown function: {function_name}")
-        if self.error or self.finished:
-            self.clear()
-        if self.tokens and self.tokens[-1] not in OPERATORS and self.tokens[-1] != "(":
-            self.tokens.append("*")
-        self.tokens.extend((function_name, "("))
-        self.replace_display = True
-        self._refresh_expression()
-
     def equals(self) -> None:
         """Вычисляет выражение или повторяет последнюю бинарную операцию."""
         if self.error:
@@ -213,46 +201,6 @@ class Calculator:
             self._set_operand(-self._operand_value(), editable=True)
         except (SyntaxError, ArithmeticError, ValueError, RecursionError):
             self._set_error()
-
-    def unary(self, operation: str) -> None:
-        """Вычисляет унарную стандартную или инженерную операцию."""
-        if self.error:
-            self.clear()
-        try:
-            value = self._operand_value()
-            if operation not in FUNCTIONS:
-                raise ValueError(f"Unknown unary operation: {operation}")
-            result = self._apply_function(operation, value)
-            self._set_operand(result)
-        except (ArithmeticError, ValueError, SyntaxError, RecursionError):
-            self._set_error()
-
-    def toggle_angle_mode(self) -> None:
-        """Переключает единицы измерения тригонометрических функций."""
-        self.angle_mode = "RAD" if self.angle_mode == "DEG" else "DEG"
-
-    def evaluate_graph(self, expression: str, x_value: float) -> float:
-        """Вычисляет графическое выражение для одного значения x."""
-        normalized = (
-            expression.replace("^", "**")
-            .replace("×", "*")
-            .replace("÷", "/")
-            .replace("−", "-")
-            .replace("π", "pi")
-        )
-        if "log(" in normalized:
-            normalized = normalized.replace("log(", "log10(")
-        tree = ast.parse(normalized, mode="eval").body
-        return self._evaluate_graph_node(tree, x_value)
-
-    def constant(self, name: str) -> None:
-        """Подставляет математическую константу в текущий операнд."""
-        constants = {"pi": math.pi, "e": math.e}
-        if name not in constants:
-            raise ValueError(f"Unknown constant: {name}")
-        if self.error or self.finished:
-            self.clear()
-        self._set_operand(constants[name])
 
     def backspace(self) -> None:
         """Удаляет последний символ текущего числа."""
@@ -379,49 +327,6 @@ class Calculator:
         ):
             return self._apply_function(node.func.id, self._evaluate(node.args[0]))
         raise ValueError("Unsupported expression")
-
-    def _apply_function(self, function_name: str, value: float) -> float:
-        """Вычисляет функцию с учётом выбранной угловой единицы."""
-        if function_name in ("sin", "cos", "tan"):
-            argument = math.radians(value) if self.angle_mode == "DEG" else value
-            return FUNCTIONS[function_name](argument)
-        if function_name in ("asin", "acos", "atan"):
-            result = FUNCTIONS[function_name](value)
-            return math.degrees(result) if self.angle_mode == "DEG" else result
-        return FUNCTIONS[function_name](value)
-
-    def _evaluate_graph_node(self, node: ast.AST, x_value: float) -> float:
-        """Вычисляет узел графика с разрешёнными переменными и функциями."""
-        if isinstance(node, ast.Name):
-            if node.id == "x":
-                return x_value
-            if node.id == "pi":
-                return math.pi
-            if node.id == "e":
-                return math.e
-            raise ValueError("Unknown graph variable")
-        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
-            return float(node.value)
-        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
-            value = self._evaluate_graph_node(node.operand, x_value)
-            return -value if isinstance(node.op, ast.USub) else value
-        if isinstance(node, ast.BinOp):
-            operator_name = self._operator_from_node(node.op)
-            return OPERATORS[operator_name](
-                self._evaluate_graph_node(node.left, x_value),
-                self._evaluate_graph_node(node.right, x_value),
-            )
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id in FUNCTIONS
-            and len(node.args) == 1
-            and not node.keywords
-        ):
-            return self._apply_function(
-                node.func.id, self._evaluate_graph_node(node.args[0], x_value)
-            )
-        raise ValueError("Unsupported graph expression")
 
     def _set_error(self) -> None:
         """Переводит калькулятор в состояние ошибки."""
