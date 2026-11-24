@@ -48,6 +48,7 @@ class Calculator:
         self.last_operator: str | None = None
         self.last_operand: float | None = None
         self.angle_mode = "DEG"
+        self.history: list[tuple[str, str]] = []
 
     def enter_digit(self, digit: str) -> None:
         """Добавляет цифру к текущему числу или начинает новое число."""
@@ -163,6 +164,7 @@ class Calculator:
         if tokens[-1] in OPERATORS:
             # Для «5 + =» используем текущий операнд повторно.
             tokens.append(self.display)
+        expression_text = " ".join(SYMBOLS.get(token, token) for token in tokens)
         try:
             tree = ast.parse(" ".join(tokens), mode="eval").body
             result = self._evaluate(tree)
@@ -183,6 +185,7 @@ class Calculator:
         self.last_operand = operand
         self.finished = True
         self.replace_display = True
+        self.history.append((expression_text, formatted))
 
     def percent(self) -> None:
         """Преобразует текущий операнд в процент."""
@@ -284,6 +287,10 @@ class Calculator:
         self.finished = False
         self.last_operator = None
         self.last_operand = None
+
+    def clear_history(self) -> None:
+        """Очищает историю, не изменяя текущее вычисление."""
+        self.history.clear()
 
     def _update_operand(self) -> None:
         """Добавляет или заменяет редактируемый числовой операнд."""

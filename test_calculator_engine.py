@@ -22,6 +22,19 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
 
         self.assertEqual(calculator.display, "4")
         self.assertEqual(calculator.expression, "5 + 6 − 7")
+        self.assertEqual(calculator.history, [("5 + 6 − 7", "4")])
+
+    def test_history_can_be_cleared_without_resetting_calculation(self) -> None:
+        """Проверяет сохранение результата и отдельную очистку истории."""
+        calculator = Calculator()
+        calculator.enter_digit("8")
+        calculator.set_operator("*")
+        calculator.enter_digit("2")
+        calculator.equals()
+        self.assertEqual(calculator.history, [("8 × 2", "16")])
+        calculator.clear_history()
+        self.assertEqual(calculator.history, [])
+        self.assertEqual(calculator.display, "16")
 
     def test_precedence_and_parentheses(self) -> None:
         """Проверяет приоритет операторов, скобки и их вложенность."""

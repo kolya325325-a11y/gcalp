@@ -37,6 +37,7 @@ class CalculatorApp:
         self.graph_x_max = 10.0
         self.graph_y_min = -10.0
         self.graph_y_max = 10.0
+        self.history_window: tk.Toplevel | None = None
         self._configure_window()
         self._create_widgets()
         self._bind_keyboard()
@@ -67,6 +68,12 @@ class CalculatorApp:
             top, textvariable=self.mode, bg=BACKGROUND, fg=TEXT,
             font=("Segoe UI Semibold", 12),
         ).pack(side="left")
+        tk.Button(
+            top, text="История", command=self._show_history,
+            bg=BACKGROUND, fg=MUTED, activebackground=BUTTON_HOVER,
+            activeforeground=TEXT, relief="flat", bd=0,
+            font=("Segoe UI", 10), cursor="hand2",
+        ).pack(side="right")
 
         display = tk.Frame(self.root, bg=BACKGROUND, padx=18, pady=8)
         display.pack(fill="x", expand=True)
@@ -429,6 +436,65 @@ class CalculatorApp:
         menu.add_command(label="Графический", command=lambda: self._set_mode("Графический"))
         menu.post(self.root.winfo_rootx() + 14, self.root.winfo_rooty() + 42)
 
+    def _show_history(self) -> None:
+        """Открывает окно истории вычислений."""
+        if self.history_window is not None and self.history_window.winfo_exists():
+            self._refresh_history_window()
+            self.history_window.deiconify()
+            self.history_window.lift()
+            return
+
+        window = tk.Toplevel(self.root)
+        window.title("История вычислений")
+        window.geometry("360x460")
+        window.minsize(280, 260)
+        window.configure(bg=BACKGROUND)
+        window.protocol("WM_DELETE_WINDOW", window.withdraw)
+        self.history_window = window
+
+        tk.Label(
+            window, text="История", bg=BACKGROUND, fg=TEXT,
+            anchor="w", font=("Segoe UI Semibold", 14),
+        ).pack(fill="x", padx=12, pady=(12, 6))
+        list_frame = tk.Frame(window, bg=BACKGROUND)
+        list_frame.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+        scrollbar = tk.Scrollbar(list_frame)
+        scrollbar.pack(side="right", fill="y")
+        self.history_list = tk.Listbox(
+            list_frame, bg=BUTTON, fg=TEXT, selectbackground=ACCENT,
+            selectforeground="#1a1a1a", relief="flat", bd=0,
+            yscrollcommand=scrollbar.set, font=("Segoe UI", 11),
+        )
+        self.history_list.pack(side="left", fill="both", expand=True)
+        scrollbar.configure(command=self.history_list.yview)
+        tk.Button(
+            window, text="Очистить историю", command=self._clear_history,
+            bg=BUTTON_FUNCTION, fg=TEXT, activebackground=BUTTON_HOVER,
+            relief="flat", bd=0, font=("Segoe UI", 10), cursor="hand2",
+        ).pack(fill="x", padx=12, pady=(0, 12), ipady=4)
+        self._refresh_history_window()
+
+    def _refresh_history_window(self) -> None:
+        """Обновляет список истории, если окно открыто."""
+        if (
+            self.history_window is None
+            or not self.history_window.winfo_exists()
+            or not hasattr(self, "history_list")
+        ):
+            return
+        self.history_list.delete(0, tk.END)
+        if not self.calculator.history:
+            self.history_list.insert(tk.END, "История пуста")
+            return
+        for expression, result in reversed(self.calculator.history):
+            self.history_list.insert(tk.END, f"{expression} =")
+            self.history_list.insert(tk.END, f"  {result}")
+
+    def _clear_history(self) -> None:
+        """Очищает историю вычислений."""
+        self.calculator.clear_history()
+        self._refresh_history_window()
+
     def _set_mode(self, mode: str) -> None:
         """Переключает раскладку и сохраняет текущее состояние вычисления."""
         if mode not in ("Стандартный", "Инженерный", "Графический"):
@@ -558,6 +624,7 @@ class CalculatorApp:
         )
         if self.angle_button is not None:
             self.angle_button.configure(text=calculator.angle_mode)
+        self._refresh_history_window()
 
     def _fit_result(self, event: tk.Event) -> None:
         """Подбирает размер шрифта результата при изменении размера окна."""
