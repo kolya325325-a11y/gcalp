@@ -148,6 +148,11 @@ class CalculatorApp:
                 bg=BUTTON, fg=TEXT, activebackground=BUTTON_HOVER,
                 relief="flat", bd=0, font=("Segoe UI", 10), cursor="hand2",
             ).pack(side="left", padx=(0, 3), ipadx=7, ipady=1)
+        self._button(
+            number_buttons, text="⌫", command=self._backspace_graph_text,
+            bg=BUTTON_FUNCTION, fg=TEXT, activebackground=BUTTON_HOVER,
+            relief="flat", bd=0, font=("Segoe UI", 10), cursor="hand2",
+        ).pack(side="left", padx=(0, 3), ipadx=7, ipady=1)
 
         toolbar = tk.Frame(self.graph_frame, bg=BACKGROUND)
         toolbar.pack(fill="x", pady=(0, 8))
@@ -221,6 +226,15 @@ class CalculatorApp:
         if self.graph_active_entry is None:
             return
         self.graph_active_entry.insert(tk.INSERT, value)
+        self.graph_active_entry.focus_set()
+
+    def _backspace_graph_text(self) -> None:
+        """Удаляет символ перед курсором в активной строке графика."""
+        if self.graph_active_entry is None:
+            return
+        cursor = self.graph_active_entry.index(tk.INSERT)
+        if cursor > 0:
+            self.graph_active_entry.delete(cursor - 1, cursor)
         self.graph_active_entry.focus_set()
 
     def _add_graph(self) -> None:

@@ -60,6 +60,16 @@ class MacButtonTests(unittest.TestCase):
         self.assertEqual(menu.call_args.kwargs, {"tearoff": False})
         self.assertEqual(menu.return_value.add_command.call_count, 3)
 
+    def test_graph_backspace_deletes_character_before_cursor(self) -> None:
+        entry = self.app.graph_active_entry
+        self.assertIsNotNone(entry)
+        entry.icursor(3)
+
+        self.app._backspace_graph_text()
+
+        self.assertEqual(entry.get(), "si(x)")
+        self.assertEqual(entry.index(tk.INSERT), 2)
+
 
 class GraphDrawingTests(unittest.TestCase):
     def test_sqrt_graph_skips_out_of_domain_samples(self) -> None:
