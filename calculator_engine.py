@@ -3,8 +3,14 @@ import math
 import operator
 
 
-OPERATORS = {"+": operator.add, "-": operator.sub, "*": operator.mul, "/": operator.truediv}
-SYMBOLS = {"+": "+", "-": "−", "*": "×", "/": "÷"}
+OPERATORS = {
+    "+": operator.add,
+    "-": operator.sub,
+    "*": operator.mul,
+    "/": operator.truediv,
+    "**": operator.pow,
+}
+SYMBOLS = {"+": "+", "-": "−", "*": "×", "/": "÷", "**": "^"}
 FUNCTIONS = {
     "square": lambda value: value * value,
     "cube": lambda value: value**3,
@@ -222,6 +228,20 @@ class Calculator:
         """Переключает единицы измерения тригонометрических функций."""
         self.angle_mode = "RAD" if self.angle_mode == "DEG" else "DEG"
 
+    def evaluate_graph(self, expression: str, x_value: float) -> float:
+        """Вычисляет графическое выражение для одного значения x."""
+        normalized = (
+            expression.replace("^", "**")
+            .replace("×", "*")
+            .replace("÷", "/")
+            .replace("−", "-")
+            .replace("π", "pi")
+        )
+        if "log(" in normalized:
+            normalized = normalized.replace("log(", "log10(")
+        tree = ast.parse(normalized, mode="eval").body
+        return self._evaluate_graph_node(tree, x_value)
+
     def constant(self, name: str) -> None:
         """Подставляет математическую константу в текущий операнд."""
         constants = {"pi": math.pi, "e": math.e}
@@ -320,7 +340,13 @@ class Calculator:
         """Возвращает строковый оператор для поддерживаемого узла AST."""
         # Возведение в степень не вводится отдельным оператором, чтобы сохранить
         # совместимость с простым текстовым синтаксисом калькулятора.
-        mapping = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/"}
+        mapping = {
+            ast.Add: "+",
+            ast.Sub: "-",
+            ast.Mult: "*",
+            ast.Div: "/",
+            ast.Pow: "**",
+        }
         if type(node) not in mapping:
             raise ValueError("Unsupported operator")
         return mapping[type(node)]
@@ -356,6 +382,39 @@ class Calculator:
             result = FUNCTIONS[function_name](value)
             return math.degrees(result) if self.angle_mode == "DEG" else result
         return FUNCTIONS[function_name](value)
+
+    def _evaluate_graph_node(self, node: ast.AST, x_value: float) -> float:
+        """Вычисляет узел графика с разрешёнными переменными и функциями."""
+        if isinstance(node, ast.Name):
+            if node.id == "x":
+                return x_value
+            if node.id == "pi":
+                return math.pi
+            if node.id == "e":
+                return math.e
+            raise ValueError("Unknown graph variable")
+        if isinstance(node, ast.Constant) and type(node.value) in (int, float):
+            return float(node.value)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            value = self._evaluate_graph_node(node.operand, x_value)
+            return -value if isinstance(node.op, ast.USub) else value
+        if isinstance(node, ast.BinOp):
+            operator_name = self._operator_from_node(node.op)
+            return OPERATORS[operator_name](
+                self._evaluate_graph_node(node.left, x_value),
+                self._evaluate_graph_node(node.right, x_value),
+            )
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in FUNCTIONS
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            return self._apply_function(
+                node.func.id, self._evaluate_graph_node(node.args[0], x_value)
+            )
+        raise ValueError("Unsupported graph expression")
 
     def _set_error(self) -> None:
         """Переводит калькулятор в состояние ошибки."""

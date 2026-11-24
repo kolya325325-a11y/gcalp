@@ -149,6 +149,16 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         calculator.toggle_angle_mode()
         self.assertEqual(calculator.angle_mode, "RAD")
 
+    def test_graph_expression_supports_x_and_functions(self) -> None:
+        """Проверяет безопасное вычисление функций графика для значения x."""
+        calculator = Calculator()
+        self.assertEqual(calculator.evaluate_graph("x^2 + 2*x", 3), 15)
+        self.assertAlmostEqual(
+            calculator.evaluate_graph("cos(5*8)+5", 0),
+            math.cos(math.radians(40)) + 5,
+            places=10,
+        )
+
     def test_keyboard_parentheses(self) -> None:
         """Передаёт клавиши скобок в общий обработчик действий."""
         # Проверка не создаёт окно Tkinter и работает без графического окружения.
