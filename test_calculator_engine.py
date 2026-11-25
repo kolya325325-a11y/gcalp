@@ -21,8 +21,8 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
                 calculator.set_operator(key)
 
         self.assertEqual(calculator.display, "4")
-        self.assertEqual(calculator.expression, "5 + 6 − 7")
-        self.assertEqual(calculator.history, [("5 + 6 − 7", "4")])
+        self.assertEqual(calculator.expression, "5+6−7")
+        self.assertEqual(calculator.history, [("5+6−7", "4")])
 
     def test_history_can_be_cleared_without_resetting_calculation(self) -> None:
         """Проверяет сохранение результата и отдельную очистку истории."""
@@ -31,7 +31,7 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         calculator.set_operator("*")
         calculator.enter_digit("2")
         calculator.equals()
-        self.assertEqual(calculator.history, [("8 × 2", "16")])
+        self.assertEqual(calculator.history, [("8×2", "16")])
         calculator.clear_history()
         self.assertEqual(calculator.history, [])
         self.assertEqual(calculator.display, "16")
@@ -161,7 +161,7 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         calculator.set_expression("12 + (3 + 4) * 2")
         calculator.equals()
         self.assertEqual(calculator.display, "26")
-        self.assertEqual(calculator.expression, "12 + ( 3 + 4 ) × 2")
+        self.assertEqual(calculator.expression, "12+(3+4)×2")
 
         calculator.set_expression("sin(30) + 5")
         calculator.equals()
@@ -207,6 +207,21 @@ class CalculatorChainedOperationsTests(unittest.TestCase):
         calculator.enter_digit("2")
         calculator.equals()
         self.assertEqual(calculator.display, "240")
+
+    def test_equals_does_not_insert_spaces_into_standard_or_engineering_expression(
+        self,
+    ) -> None:
+        from calculator_engine import EngineeringCalculator, StandardCalculator
+
+        cases = (
+            (StandardCalculator(), "12 + (3 + 4) * 2", "12+(3+4)×2"),
+            (EngineeringCalculator(), "sin(30) + 5", "sin(30)+5"),
+        )
+        for calculator, source, expected in cases:
+            with self.subTest(source=source):
+                calculator.set_expression(source)
+                calculator.equals()
+                self.assertEqual(calculator.expression, expected)
 
     def test_engineering_operations_and_constants(self) -> None:
         """Проверяет инженерные функции и ошибки за пределами их математического домена."""

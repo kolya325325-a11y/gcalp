@@ -194,7 +194,7 @@ class BaseCalculator:
         if tokens[-1] in OPERATORS:
             # Для «5 + =» используем текущий операнд повторно.
             tokens.append(self.display)
-        expression_text = " ".join(SYMBOLS.get(token, token) for token in tokens)
+        expression_text = self._format_expression(tokens)
         try:
             tree = ast.parse(" ".join(tokens), mode="eval").body
             result = self._evaluate(tree)
@@ -476,11 +476,16 @@ class BaseCalculator:
         self.replace_display = not editable
         self._refresh_expression()
 
+    @staticmethod
+    def _format_expression(tokens: list[str]) -> str:
+        """Формирует отображаемое выражение без изменения разделения на токены."""
+        return "".join(SYMBOLS.get(token, token) for token in tokens)
+
     def _refresh_expression(self) -> None:
         """Обновляет строку выражения для интерфейса."""
         # Внутренние операторы заменяются на удобные для отображения символы.
         self._editable_expression = None
-        self.expression = " ".join(SYMBOLS.get(token, token) for token in self.tokens)
+        self.expression = self._format_expression(self.tokens)
 
     @staticmethod
     def _operator_from_node(node: ast.operator) -> str:
