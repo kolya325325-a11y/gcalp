@@ -1,6 +1,7 @@
 import tkinter as tk
 import math
 from tkinter import ttk
+from collections.abc import Callable
 from typing import Any
 
 from calculator_engine import GraphingCalculator
@@ -22,6 +23,15 @@ from .theme import (
     MUTED,
     TEXT,
 )
+
+BUTTON_DEBOUNCE_MS = 250
+MODE_GEOMETRY = {
+    "Стандартный": ("360x620", 320, 550),
+    "Инженерный": ("360x650", 320, 650),
+    "Графический": ("760x650", 600, 500),
+}
+
+
 class CalculatorApp:
     def __init__(self, root: tk.Tk) -> None:
         """Создаёт интерфейс и связывает его с вычислительной моделью."""
@@ -331,9 +341,13 @@ class CalculatorApp:
 
         engineering = self.mode.get() == "Инженерный"
         columns = 6 if engineering else 4
+        for column in range(6):
+            self.grid.columnconfigure(column, weight=0, uniform="")
+        for row in range(8):
+            self.grid.rowconfigure(row, weight=0, uniform="")
         for column in range(columns):
             self.grid.columnconfigure(column, weight=1, uniform="calculator")
-        for row in range(8 if engineering else 7):
+        for row in range(7):
             self.grid.rowconfigure(row, weight=1, uniform="calculator")
 
         if not engineering:
@@ -426,24 +440,29 @@ class CalculatorApp:
 
     def _set_mode(self, mode: str) -> None:
         """Переключает раскладку и сохраняет текущее состояние вычисления."""
-        if mode not in ("Стандартный", "Инженерный", "Графический"):
+        if mode not in MODE_GEOMETRY:
             raise ValueError(f"Unknown calculator mode: {mode}")
+        geometry, min_width, min_height = MODE_GEOMETRY[mode]
+        self.root.minsize(min_width, min_height)
+        self.root.update_idletasks()
+        self.root.geometry(geometry)
         self.mode.set(mode)
         if mode == "Графический":
             self.display.pack_forget()
             self.grid.pack_forget()
             self.graph_frame.pack(fill="both", expand=True)
-            self.root.geometry("760x650")
-            self.root.minsize(600, 500)
             self._draw_graph()
         else:
             self.graph_frame.pack_forget()
             self.display.pack(fill="x", expand=True)
             self.grid.pack(fill="both", expand=True)
-            self.root.minsize(320, 550 if mode == "Стандартный" else 650)
             self._render_keys()
 
     def _button(self, parent: tk.Misc, **options: Any) -> tk.Button | ttk.Button:
+        command = options.get("command")
+        if callable(command):
+            options["command"] = self._single_fire(command)
+
         if not IS_MAC:
             return tk.Button(parent, **options)
 
@@ -468,6 +487,26 @@ class CalculatorApp:
             )
             self._button_styles[key] = style
         return ttk.Button(parent, style=self._button_styles[key], **options)
+
+    def _single_fire(self, command: Callable[[], Any]) -> Callable[[], None]:
+        """Предотвращает повторный запуск одной команды в цикле событий Tk."""
+        busy = False
+
+        def run_once() -> None:
+            nonlocal busy
+            if busy:
+                return
+            busy = True
+            try:
+                command()
+            finally:
+                self.root.after(BUTTON_DEBOUNCE_MS, release)
+
+        def release() -> None:
+            nonlocal busy
+            busy = False
+
+        return run_once
 
     def _make_button(
         self, parent: tk.Frame, label: str, action: str, row: int, column: int,

@@ -60,6 +60,57 @@ class MacButtonTests(unittest.TestCase):
         self.assertEqual(menu.call_args.kwargs, {"tearoff": False})
         self.assertEqual(menu.return_value.add_command.call_count, 3)
 
+    def test_button_ignores_duplicate_activation_in_same_event_cycle(self) -> None:
+        command = Mock()
+        button = self.app._button(
+            self.app.root,
+            text="7",
+            command=command,
+            bg="#323232",
+            fg="#ffffff",
+            activebackground="#3d3d3d",
+            relief="flat",
+            bd=0,
+            font=("Segoe UI", 11),
+        )
+
+        button.invoke()
+        button.invoke()
+        command.assert_called_once_with()
+
+        self.root.after(300, self.root.quit)
+        self.root.mainloop()
+        button.invoke()
+        self.assertEqual(command.call_count, 2)
+
+    def test_window_shrinks_when_switching_to_smaller_mode(self) -> None:
+        self.root.deiconify()
+        self.root.update()
+        self.app._set_mode("Графический")
+        self.root.update()
+        self.assertEqual(self.root.geometry().split("+", 1)[0], "760x650")
+
+        self.app._set_mode("Инженерный")
+        self.root.update()
+        self.assertEqual(self.root.geometry().split("+", 1)[0], "360x650")
+
+        self.app._set_mode("Стандартный")
+        self.root.update()
+        self.assertEqual(self.root.geometry().split("+", 1)[0], "360x620")
+
+    def test_switching_modes_removes_unused_grid_space(self) -> None:
+        self.app._set_mode("Инженерный")
+        self.assertEqual(self.app.grid.rowconfigure(7)["weight"], 0)
+        self.assertEqual(self.app.grid.columnconfigure(5)["weight"], 1)
+
+        self.app._set_mode("Стандартный")
+        self.assertEqual(self.app.grid.columnconfigure(4)["weight"], 0)
+        self.assertEqual(self.app.grid.columnconfigure(5)["weight"], 0)
+
+        self.app._set_mode("Инженерный")
+        self.assertEqual(self.app.grid.columnconfigure(4)["weight"], 1)
+        self.assertEqual(self.app.grid.columnconfigure(5)["weight"], 1)
+
     def test_graph_backspace_deletes_character_before_cursor(self) -> None:
         entry = self.app.graph_active_entry
         self.assertIsNotNone(entry)
